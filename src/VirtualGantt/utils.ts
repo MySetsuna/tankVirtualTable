@@ -1,14 +1,35 @@
 import dayjs, { Dayjs } from "dayjs";
-import { GanttMode } from ".";
-import { ColumnDef } from "@tanstack/react-table";
+import { GanttMode, HeadRender } from ".";
+import {
+  ColumnDef,
+  ColumnDefTemplate,
+  HeaderContext,
+} from "@tanstack/react-table";
+import { ReactNode } from "react";
 
-export const buildGanttHeader = (
+export const WEEKDAY_MAP = {
+  0: "日",
+  1: "一",
+  2: "二",
+  3: "三",
+  4: "四",
+  5: "五",
+  6: "六",
+};
+
+export const buildGanttHeader = <T>(
   mode: GanttMode,
   startAt: Dayjs,
-  endAt: Dayjs
+  endAt: Dayjs,
+  headRender?: HeadRender<T>,
+  cellWidth = 50
 ): ColumnDef<any>[] => {
   if (mode === GanttMode.Month) {
     const columns: ColumnDef<any>[] = [];
+    const startAtMonth = startAt.format("YYYY-MM");
+    const startAtDateNumber = startAt.get("date");
+    const endAtMonth = endAt.format("YYYY-MM");
+    const endAtDateNumber = endAt.get("date");
     for (
       let start = startAt;
       start.get("year") <= endAt.get("year");
@@ -30,30 +51,51 @@ export const buildGanttHeader = (
       ) {
         const monthHeader = start0.format("YYYY-MM");
 
-        const startDate = start0.startOf("month").get("date");
-        const endDate = start0.endOf("month").get("date");
+        const startDateNumber = start0.startOf("month").get("date");
+        const endDateNumber = start0.endOf("month").get("date");
         const dateColumns: ColumnDef<any>[] = [];
-        for (let start1 = startDate; start1 <= endDate; start1++) {
+        const beginNumber =
+          startAtMonth === monthHeader ? startAtDateNumber : startDateNumber;
+        const stopNumber =
+          endAtMonth === monthHeader ? endAtDateNumber : endDateNumber;
+        for (let start1 = beginNumber; start1 <= stopNumber; start1++) {
+          const current = monthHeader + "-" + start1;
           dateColumns.push({
-            header: `${start1}`,
-            id: monthHeader + start1,
-            accessorFn: () => dayjs(monthHeader + "-" + start1),
-            size: 50,
+            header: headRender?.date?.(dayjs(current)) || `${startDateNumber}`,
+            id: current,
+            size: cellWidth,
           });
         }
 
         monthColumns.push({
-          header: monthHeader,
+          id: monthHeader,
+          header: headRender?.month?.(dayjs(monthHeader)) || monthHeader,
           columns: dateColumns,
         });
       }
       columns.push({
         header: yearHeader,
         columns: monthColumns,
+        id: yearHeader,
       });
     }
 
     return columns;
   }
   return [];
+};
+
+export const buildGanttHeaderWithCurrentDate = <T>(
+  mode: GanttMode,
+  currentAt: Dayjs,
+  bufferMonths: [number] | [number, number],
+  headRender?: HeadRender<T>,
+  cellWidth = 50
+) => {
+  const preBuffer = bufferMonths[0];
+  const nextBuffer = bufferMonths[1] || bufferMonths[0];
+  const startAt = currentAt.add(-preBuffer, "month");
+  const endAt = currentAt.add(nextBuffer, "month");
+  const columns = buildGanttHeader(mode, startAt, endAt, headRender, cellWidth);
+  return { columns, startAt, endAt };
 };

@@ -74,7 +74,9 @@ export const VirtualTable = (props: VirtualTableProps) => {
   return (
     <div
       ref={parentRef}
-      className={[styles.virtualTable, "container"].join(" ")}
+      className={[styles.virtualTable, "gantt-container", "container"].join(
+        " "
+      )}
       style={{ width }}
     >
       <div style={{ height: `${rowVirtualizer.getTotalSize() + 60}px` }}>

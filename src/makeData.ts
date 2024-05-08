@@ -37,11 +37,11 @@ const newPerson = (index: number): Person => {
     progress1: faker.datatype.number(50),
     progress2: faker.datatype.number(50),
     createdAt: faker.datatype.datetime({
-      max: dayjs().add(18, "month").valueOf(),
+      max: dayjs().add(38, "month").valueOf(),
       min: dayjs().add(-2, "month").valueOf(),
     }),
     createdAt2: faker.datatype.datetime({
-      max: dayjs().add(18, "month").valueOf(),
+      max: dayjs().add(38, "month").valueOf(),
       min: dayjs().add(-2, "month").valueOf(),
     }),
     status: faker.helpers.shuffle<Person["status"]>([
