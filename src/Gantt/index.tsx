@@ -6,9 +6,9 @@ import { TextField } from "@radix-ui/themes";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { VirtualGantt } from "../VirtualGantt";
 import dayjs from "dayjs";
-
+const mdata = makeData(50_000);
 export const Gantt = () => {
-  const [data, setData] = React.useState(() => makeData(50_00));
+  const [data, setData] = React.useState(mdata);
   React.useEffect(() => {
     new ScrollMirror(document.querySelectorAll(".gantt-container"), {
       horizontal: false,
@@ -94,8 +94,7 @@ export const Gantt = () => {
       />
       <VirtualGantt
         currentAt={dayjs("2024-03-25")}
-        bufferMonths={[1, 3]}
-        maxDayNumber={1000}
+        bufferMonths={[3, 2]}
         // endAt={dayjs("2025-06-28")}
         data={data}
         width={800}
@@ -105,13 +104,25 @@ export const Gantt = () => {
         }}
         rowRender={(row, startDate, endDate, cellWidth) => {
           const rowStart = dayjs(row.createdAt);
-          const diff = rowStart.diff(startDate, "day");
-          if (rowStart.valueOf() > endDate.valueOf()) {
+          let diff = rowStart.diff(startDate, "day");
+          if (diff < 0) {
+            diff -= 1;
+          }
+          if (
+            rowStart.startOf("date").valueOf() >
+            endDate.startOf("date").valueOf()
+          ) {
             return null;
           }
           return (
             <div
-              title={rowStart.format("YYYY-MM-DD")}
+              title={
+                rowStart.format("YYYY-MM-DD") +
+                "___" +
+                diff +
+                "___" +
+                startDate.format("YYYY-MM-DD")
+              }
               style={{
                 position: "absolute",
                 height: 20,

@@ -85,17 +85,13 @@ export const buildGanttHeader = <T>(
   return [];
 };
 
-export const buildGanttHeaderWithCurrentDate = <T>(
-  mode: GanttMode,
+export const getRangeAtByCurrentAt = <T>(
   currentAt: Dayjs,
   bufferMonths: [number] | [number, number],
-  headRender?: HeadRender<T>,
-  cellWidth = 50
 ) => {
   const preBuffer = bufferMonths[0];
   const nextBuffer = bufferMonths[1] || bufferMonths[0];
   const startAt = currentAt.add(-preBuffer, "month");
   const endAt = currentAt.add(nextBuffer, "month");
-  const columns = buildGanttHeader(mode, startAt, endAt, headRender, cellWidth);
-  return { columns, startAt, endAt };
+  return { startAt, endAt };
 };

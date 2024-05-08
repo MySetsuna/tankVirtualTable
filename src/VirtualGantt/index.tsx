@@ -17,17 +17,15 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import dayjs, { Dayjs } from "dayjs";
 import weekday from "dayjs/plugin/weekday";
-import {
-  WEEKDAY_MAP,
-  buildGanttHeader,
-  buildGanttHeaderWithCurrentDate,
-} from "./utils";
+import { WEEKDAY_MAP, buildGanttHeader, getRangeAtByCurrentAt } from "./utils";
 import { ScrollSyncNode } from "scroll-sync-react";
+import { debounce, unionBy } from "lodash";
 
 dayjs.extend(weekday);
 
@@ -62,21 +60,21 @@ type VirtualGanttProps<T = AnyObject> = {
   rowHeight?: number;
   cellWidth?: number;
   overscan?: number;
+  bufferDay?: number;
   headRender?: HeadRender<T>;
   isHoliday?: (date: Dayjs) => boolean;
+  isInfiniteX?: boolean;
 } & (
   | {
       startAt: Dayjs;
       endAt: Dayjs;
       currentAt?: undefined;
       bufferMonths?: undefined;
-      maxDayNumber?: undefined;
     }
   | {
       startAt?: undefined;
       endAt?: undefined;
       currentAt: Dayjs;
-      maxDayNumber: number;
       bufferMonths: BufferMonths;
     }
 );
@@ -85,6 +83,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const {
     mode = GanttMode.Month,
     overscan = 10,
+    bufferDay = 10,
     rowHeight = 34,
     cellWidth = 50,
     data,
@@ -97,54 +96,61 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     style,
     isHoliday,
     bufferMonths,
-    maxDayNumber,
+    isInfiniteX,
   } = props;
   type TData = (typeof data)[0];
 
   const [columns, setColumns] = useState<ColumnDef<any>[]>([]);
-  const [startDate, setStartDate] = useState<Dayjs>(dayjs().startOf("month"));
-  const [endDate, setEndDate] = useState<Dayjs>(dayjs().endOf("month"));
-  const scrollToTimer = useRef<NodeJS.Timeout | null>(null);
-  const scrollCallback = useRef<(() => void) | null>(null);
-  const [currentBufferMonths, setCurrentBufferMonths] = useState<BufferMonths>(
-    bufferMonths || [2]
+  const [startDate, setStartDate] = useState<Dayjs | undefined>(
+    startAt?.clone()
   );
+  const [endDate, setEndDate] = useState<Dayjs | undefined>(endAt?.clone());
+  const [currentDate, setCurrentDate] = useState<Dayjs | undefined>(
+    currentAt?.clone()
+  );
+  const scrollToTimer = useRef<NodeJS.Timeout | null>(null);
+  const scrollCallback = useRef<(() => void) | null>(() => {});
 
   const parentRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (startAt && endAt) {
+  useLayoutEffect(() => {
+    if (startDate && endDate) {
       const columns = buildGanttHeader<TData>(
         mode,
-        startAt,
-        endAt,
+        startDate,
+        endDate,
         headRender,
         cellWidth
       );
       setColumns(columns);
+      scrollCallback.current?.();
+    }
+  }, [startDate, endDate, headRender, cellWidth]);
+
+  useEffect(() => {
+    if (startAt && endAt) {
       setStartDate(startAt);
       setEndDate(endAt);
     }
-  }, [startAt, endAt, mode, headRender, cellWidth]);
+  }, [startAt, endAt]);
 
   useEffect(() => {
-    if (currentAt) {
-      const { columns, startAt, endAt } = buildGanttHeaderWithCurrentDate(
-        mode,
-        currentAt,
-        bufferMonths,
-        headRender,
-        cellWidth
+    setCurrentDate(currentAt);
+  }, [currentAt]);
+
+  useEffect(() => {
+    if (currentDate && bufferMonths) {
+      const { startAt, endAt } = getRangeAtByCurrentAt(
+        currentDate,
+        bufferMonths
       );
-      setColumns(columns);
       setStartDate(startAt);
       setEndDate(endAt);
-      if (parentRef.current) {
-        const startOffset = currentAt.diff(startAt, "day");
+      if (parentRef.current && isInfiniteX) {
+        const startOffset = currentDate.diff(startAt, "day");
         scrollCallback.current = () =>
           parentRef.current?.scrollTo({
             left: (startOffset > 3 ? startOffset - 3 : startOffset) * cellWidth,
-            behavior: "smooth",
           });
         const onScroll = () => {
           if (scrollToTimer.current) clearTimeout(scrollToTimer.current);
@@ -161,7 +167,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         };
       }
     }
-  }, [currentAt, mode, bufferMonths, headRender, maxDayNumber, cellWidth]);
+  }, [currentDate, bufferMonths, cellWidth]);
 
   const table = useReactTable({
     data,
@@ -180,29 +186,41 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   });
 
   const handleScroll = useCallback(() => {
-    if (!scrollCallback.current && currentAt && parentRef.current) {
-      const toLeft = parentRef.current?.scrollLeft < cellWidth * 3;
+    if (!scrollCallback.current && isInfiniteX && parentRef.current) {
+      const toLeft = parentRef.current?.scrollLeft === 0;
+
+      const toRight =
+        parentRef.current?.scrollLeft + parentRef.current?.clientWidth ===
+        parentRef.current?.scrollWidth;
+
       if (toLeft) {
-        const bufferMonths: BufferMonths = [
-          currentBufferMonths[0] + 1,
-          currentBufferMonths[1] || currentBufferMonths[0],
-        ];
-        setCurrentBufferMonths(bufferMonths);
-        const { columns, startAt, endAt } = buildGanttHeaderWithCurrentDate(
-          mode,
-          currentAt,
-          bufferMonths,
-          headRender,
-          cellWidth
-        );
-        setColumns(columns);
-        setStartDate(startAt);
-        setEndDate(endAt);
-        // parentRef.current.scrollLeft =
-        //   cellWidth * startDate.diff(startAt, "day");
+        scrollCallback.current = () => {
+          parentRef.current?.scrollTo({
+            left: cellWidth * bufferDay,
+          });
+          scrollCallback.current = null;
+        };
+
+        setEndDate((date) => date?.add(-bufferDay, "day"));
+        setStartDate((date) => date?.add(-bufferDay, "day"));
+
+        return;
+      }
+      if (toRight) {
+        scrollCallback.current = () => {
+          parentRef.current?.scrollTo({
+            left: parentRef.current.scrollLeft - cellWidth * bufferDay,
+          });
+          scrollCallback.current = null;
+        };
+
+        setStartDate((date) => date?.add(bufferDay, "day"));
+        setEndDate((date) => date?.add(bufferDay, "day"));
+
+        return;
       }
     }
-  }, [currentBufferMonths, startDate]);
+  }, [cellWidth, bufferDay]);
 
   const visibleHeaderGroups = table
     .getHeaderGroups()
@@ -236,6 +254,17 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
       style={{ width, ...style }}
       onScroll={handleScroll}
     >
+      <div
+        style={{
+          position: "fixed",
+          color: "red",
+          zIndex: 99999,
+          top: 0,
+          left: 0,
+        }}
+      >
+        {startDate?.format("YYYY-MM-DD")}---{endDate?.format("YYYY-MM-DD")}
+      </div>
       <div
         className="gantt-scroll-container"
         style={{
@@ -329,9 +358,12 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                   }px)`,
                   flexDirection: "column",
                   justifyContent: "center",
+                  overflow: "hidden",
                 }}
               >
-                {rowRender(row.original, startDate, endDate, cellWidth)}
+                {!!startDate &&
+                  !!endDate &&
+                  rowRender(row.original, startDate, endDate, cellWidth)}
               </div>
             );
           })}
@@ -378,12 +410,13 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
 
 VirtualGantt.defaultProps = {
   mode: GanttMode.Month,
-  bufferMonths: [1, 2],
-  maxDayNumber: 1000,
+  bufferMonths: [2, 2],
   showYearRow: false,
   rowHeight: 34,
   overscan: 10,
+  bufferDay: 20,
   cellWidth: 60,
+  isInfiniteX: true,
   headRender: {
     showYearRow: false,
     height: [30],
