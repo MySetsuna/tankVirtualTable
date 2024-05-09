@@ -9,7 +9,6 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import React, { ReactNode } from "react";
-import styles from "./index.module.scss";
 
 type AnyObject = {
   [key: string]: any;
@@ -74,9 +73,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
   return (
     <div
       ref={parentRef}
-      className={[styles.virtualTable, "gantt-container", "container"].join(
-        " "
-      )}
+      className={["gantt-container", "container"].join(" ")}
       style={{ width }}
     >
       <div style={{ height: `${rowVirtualizer.getTotalSize() + 60}px` }}>
