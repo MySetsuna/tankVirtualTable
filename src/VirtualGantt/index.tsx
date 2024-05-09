@@ -303,6 +303,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             top: 0,
             zIndex: 3,
             flexDirection: "column",
+            // overflow: "hidden",
           }}
         >
           {visibleHeaderGroups.map((headerGroup, index) => {
@@ -316,7 +317,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                 // style={{ display: "flex", overflow: "hidden" }}
                 style={{ display: "flex" }}
               >
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header, index) => {
                   const isLeafHeader = header.depth === 3;
                   return (
                     <div
@@ -333,6 +334,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                         borderBottom: !isLeafHeader
                           ? "1px white solid"
                           : "unset",
+                        zIndex: index,
                       }}
                     >
                       {header.isPlaceholder ? null : (
@@ -345,13 +347,20 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                                   width: "min-content",
                                   whiteSpace: "nowrap",
                                   height,
-                                  overflow: "hidden",
+
+                                  overflow: "visible",
                                   padding: "0 5px",
                                 }
                               : { height }
                           }
                         >
-                          <div>
+                          <div
+                            style={{
+                              position: "absolute",
+                              overflow: "visible",
+                              width: "0px",
+                            }}
+                          >
                             {flexRender(
                               header.column.columnDef.header,
                               header.getContext()
