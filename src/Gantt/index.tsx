@@ -93,8 +93,8 @@ export const Gantt = () => {
         data={data}
       />
       <VirtualGantt
-        currentAt={dayjs("2024-03-25")}
-        bufferMonths={[3, 2]}
+        currentAt={dayjs("2024-05-09")}
+        bufferMonths={[1, 2]}
         // endAt={dayjs("2025-06-28")}
         data={data}
         width={800}
