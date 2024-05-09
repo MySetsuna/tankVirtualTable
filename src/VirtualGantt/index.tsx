@@ -23,9 +23,23 @@ import React, {
 } from "react";
 import dayjs, { Dayjs } from "dayjs";
 import weekday from "dayjs/plugin/weekday";
-import { WEEKDAY_MAP, buildGanttHeader, getRangeAtByCurrentAt } from "./utils";
-import { ScrollSyncNode } from "scroll-sync-react";
-import { debounce, unionBy } from "lodash";
+import {
+  WEEKDAY_MAP,
+  buildGanttHeader,
+  getGanttStyleByStart,
+  getRangeAtByCurrentAt,
+} from "./utils";
+import { debounce } from "lodash";
+import weekOfYear from "dayjs/plugin/weekOfYear";
+import weekYear from "dayjs/plugin/weekYear";
+import advancedFormat from "dayjs/plugin/advancedFormat";
+import "dayjs/locale/zh-cn";
+
+dayjs.extend(advancedFormat);
+
+dayjs.extend(weekOfYear);
+
+dayjs.extend(weekYear);
 
 dayjs.extend(weekday);
 
@@ -41,6 +55,10 @@ export type HeadRender<T> = {
   showYearRow?: boolean;
   height?: [number] | [number, number] | [number, number, number];
   date?: (date: Dayjs) => ColumnDefTemplate<HeaderContext<T, unknown>>;
+  week?: (
+    date: Dayjs,
+    timezone: string
+  ) => ColumnDefTemplate<HeaderContext<T, unknown>>;
   month?: (date: Dayjs) => ColumnDefTemplate<HeaderContext<T, unknown>>;
 };
 
@@ -53,7 +71,12 @@ type VirtualGanttProps<T = AnyObject> = {
     data: any,
     start: Dayjs,
     end: Dayjs,
-    cellWidth: number
+    cellWidth: number,
+    getGanttStyleByStart: (
+      bartStartAt: Dayjs,
+      startDate: Dayjs,
+      cellWidth: number
+    ) => CSSProperties
   ) => ReactNode;
   width?: number;
   style?: CSSProperties;
@@ -64,6 +87,7 @@ type VirtualGanttProps<T = AnyObject> = {
   headRender?: HeadRender<T>;
   isHoliday?: (date: Dayjs) => boolean;
   isInfiniteX?: boolean;
+  isWeekStartMonday?: boolean;
 } & (
   | {
       startAt: Dayjs;
@@ -97,6 +121,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     isHoliday,
     bufferMonths,
     isInfiniteX,
+    isWeekStartMonday,
   } = props;
   type TData = (typeof data)[0];
 
@@ -120,12 +145,15 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         startDate,
         endDate,
         headRender,
-        cellWidth
+        cellWidth,
+        isWeekStartMonday
       );
+      console.log(startDate.format("YYYYMMDD"), endDate.format("YYYYMMDD"));
+
       setColumns(columns);
       scrollCallback.current?.();
     }
-  }, [startDate, endDate, headRender, cellWidth]);
+  }, [startDate, endDate, headRender, cellWidth, isWeekStartMonday]);
 
   useEffect(() => {
     if (startAt && endAt) {
@@ -188,7 +216,6 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const handleScroll = useCallback(() => {
     if (!scrollCallback.current && isInfiniteX && parentRef.current) {
       const toLeft = parentRef.current?.scrollLeft === 0;
-
       const toRight =
         parentRef.current?.scrollLeft + parentRef.current?.clientWidth ===
         parentRef.current?.scrollWidth;
@@ -200,10 +227,8 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
           });
           scrollCallback.current = null;
         };
-
         setEndDate((date) => date?.add(-bufferDay, "day"));
         setStartDate((date) => date?.add(-bufferDay, "day"));
-
         return;
       }
       if (toRight) {
@@ -213,10 +238,8 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
           });
           scrollCallback.current = null;
         };
-
         setStartDate((date) => date?.add(bufferDay, "day"));
         setEndDate((date) => date?.add(bufferDay, "day"));
-
         return;
       }
     }
@@ -288,7 +311,11 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
               headRender?.height?.[0] ||
               rowHeight;
             return (
-              <div key={headerGroup.id} style={{ display: "flex" }}>
+              <div
+                key={headerGroup.id}
+                // style={{ display: "flex", overflow: "hidden" }}
+                style={{ display: "flex" }}
+              >
                 {headerGroup.headers.map((header) => {
                   const isLeafHeader = header.depth === 3;
                   return (
@@ -318,15 +345,18 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                                   width: "min-content",
                                   whiteSpace: "nowrap",
                                   height,
+                                  overflow: "hidden",
                                   padding: "0 5px",
                                 }
                               : { height }
                           }
                         >
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          <div>
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -342,11 +372,12 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
           style={{
             width: scrollWidth,
             zIndex: 2,
-            position: "relative",
+            height: ganttBodyHeight,
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
             const row = rows[virtualRow.index] as Row<(typeof data)[0]>;
+
             return (
               <div
                 key={row.id}
@@ -363,18 +394,28 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
               >
                 {!!startDate &&
                   !!endDate &&
-                  rowRender(row.original, startDate, endDate, cellWidth)}
+                  rowRender(
+                    row.original,
+                    startDate,
+                    endDate,
+                    cellWidth,
+                    getGanttStyleByStart
+                  )}
               </div>
             );
           })}
         </div>
         <div
+          className="gantt-background"
           style={{
             position: "absolute",
             display: "flex",
             top: headerHeight,
             width: scrollWidth,
-            height: ganttBodyHeight,
+            height: Math.max(
+              ganttBodyHeight,
+              parentRef.current?.clientHeight ?? 0
+            ),
             zIndex: 1,
             backgroundColor: "white",
             pointerEvents: "none",
@@ -417,6 +458,7 @@ VirtualGantt.defaultProps = {
   bufferDay: 20,
   cellWidth: 60,
   isInfiniteX: true,
+  isWeekStartMonday: true,
   headRender: {
     showYearRow: false,
     height: [30],
@@ -426,6 +468,7 @@ VirtualGantt.defaultProps = {
         const dateStr = date.format("D");
         return (
           <div
+            title={date.format("YYYY-MM-DD w")}
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -446,6 +489,23 @@ VirtualGantt.defaultProps = {
         //   props.header.index && monthNumber ? "M月" : "YYYY-MM"
         // );
         return date.format("YYYY年M月");
+      };
+    },
+    week: (date, timezone) => {
+      return (props) => {
+        // const monthNumber = date.get("month");
+        // return date.format(
+        //   props.header.index && monthNumber ? "M月" : "YYYY-MM"
+        // );
+
+        return (
+          `${date.locale(timezone).weekYear()}年` +
+          " " +
+          `${date.locale(timezone).week()}周 ` +
+          `${date.format("YYYY-MM-DD")}~${date
+            .add(6, "day")
+            .format("YYYY-MM-DD")}`
+        );
       };
     },
   },

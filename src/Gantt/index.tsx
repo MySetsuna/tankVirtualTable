@@ -1,12 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import ScrollMirror from "scrollmirror";
 import { VirtualTable } from "../VirtualTable";
 import { makeData } from "../makeData";
 import { TextField } from "@radix-ui/themes";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
-import { VirtualGantt } from "../VirtualGantt";
+import { GanttMode, VirtualGantt } from "../VirtualGantt";
 import dayjs from "dayjs";
-const mdata = makeData(50_000);
+const mdata = makeData(10);
 export const Gantt = () => {
   const [data, setData] = React.useState(mdata);
   React.useEffect(() => {
@@ -15,128 +15,144 @@ export const Gantt = () => {
       proportional: false,
     });
   }, []);
+
+  const [ganttMode, setGanttMode] = useState<GanttMode>(GanttMode.Week);
   return (
-    <div style={{ display: "flex" }}>
-      <VirtualTable
-        width={700}
-        columns={[
-          {
-            accessorKey: "id",
+    <div>
+      <select
+        value={ganttMode}
+        onChange={(event) => {
+          setGanttMode(Number(event.target.value));
+        }}
+      >
+        <option value={GanttMode.Month}>月</option>
+        <option value={GanttMode.Week}>周</option>
+      </select>
 
-            header: "ID",
-            size: 160,
-          },
-          {
-            accessorKey: "firstName",
-            cell: (info) => info.getValue(),
-            size: 160,
-          },
-          {
-            accessorFn: (row) => row.lastName,
-            id: "lastName",
-            cell: (info) => info.getValue(),
-            header: () => <span>Last Name</span>,
-            size: 160,
-          },
-          {
-            accessorKey: "age",
-            header: () => "Age",
-            size: 150,
-          },
-          {
-            accessorKey: "visits",
-            header: () => <span>Visits</span>,
-            size: 150,
-          },
-          {
-            accessorKey: "status",
-            header: "Status",
-            size: 100,
-          },
-          {
-            accessorKey: "progress",
-            header: "Profile Progress",
-            size: 180,
-          },
+      <div style={{ display: "flex" }}>
+        <VirtualTable
+          width={700}
+          columns={[
+            {
+              accessorKey: "id",
 
-          {
-            accessorKey: "createdAt",
-            header: "Created At",
-            cell: (info) => info.getValue<Date>().toLocaleString(),
-            size: 200,
-          },
-          {
-            accessorKey: "progress1",
-            header: "Profile Progress",
-            size: 180,
-          },
-        ]}
-        cellRender={({ content, width, isActive: isEditing }) => {
-          if (isEditing) {
+              header: "ID",
+              size: 160,
+            },
+            {
+              accessorKey: "firstName",
+              cell: (info) => info.getValue(),
+              size: 160,
+            },
+            {
+              accessorFn: (row) => row.lastName,
+              id: "lastName",
+              cell: (info) => info.getValue(),
+              header: () => <span>Last Name</span>,
+              size: 160,
+            },
+            {
+              accessorKey: "age",
+              header: () => "Age",
+              size: 150,
+            },
+            {
+              accessorKey: "visits",
+              header: () => <span>Visits</span>,
+              size: 150,
+            },
+            {
+              accessorKey: "status",
+              header: "Status",
+              size: 100,
+            },
+            {
+              accessorKey: "progress",
+              header: "Profile Progress",
+              size: 180,
+            },
+
+            {
+              accessorKey: "createdAt",
+              header: "Created At",
+              cell: (info) => info.getValue<Date>().toLocaleString(),
+              size: 200,
+            },
+            {
+              accessorKey: "progress1",
+              header: "Profile Progress",
+              size: 180,
+            },
+          ]}
+          cellRender={({ content, width, isActive: isEditing }) => {
+            if (isEditing) {
+              return (
+                <TextField.Root
+                  placeholder="Search the docs…"
+                  defaultValue={content}
+                  style={{
+                    display: "flex",
+                    width: `${width}px`,
+                  }}
+                >
+                  <TextField.Slot>
+                    <MagnifyingGlassIcon height="16" width="16" />
+                  </TextField.Slot>
+                </TextField.Root>
+              );
+            }
+            return content;
+          }}
+          data={data}
+        />
+        <VirtualGantt
+          mode={ganttMode}
+          currentAt={dayjs("2024-12-25")}
+          bufferMonths={[3, 2]}
+          bufferDay={20}
+          // endAt={dayjs("2025-06-28")}
+          data={data}
+          width={800}
+          style={{
+            position: "relative",
+            left: -17,
+          }}
+          rowRender={(
+            row,
+            startDate,
+            endDate,
+            cellWidth,
+            getGanttStyleByStart
+          ) => {
+            const rowStart = dayjs(row.createdAt);
+            if (
+              rowStart.startOf("date").valueOf() >
+              endDate.startOf("date").valueOf()
+            ) {
+              return null;
+            }
+            const style = getGanttStyleByStart(rowStart, startDate, cellWidth);
             return (
-              <TextField.Root
-                placeholder="Search the docs…"
-                defaultValue={content}
+              <div
+                title={
+                  rowStart.format("YYYY-MM-DD") +
+                  "___" +
+                  startDate.format("YYYY-MM-DD")
+                }
                 style={{
-                  display: "flex",
-                  width: `${width}px`,
+                  height: 20,
+                  margin: "auto",
+                  width: 300,
+                  backgroundColor: "pink",
+                  ...style,
                 }}
               >
-                <TextField.Slot>
-                  <MagnifyingGlassIcon height="16" width="16" />
-                </TextField.Slot>
-              </TextField.Root>
+                {rowStart.format("YYYY-MM-DD")}
+              </div>
             );
-          }
-          return content;
-        }}
-        data={data}
-      />
-      <VirtualGantt
-        currentAt={dayjs("2024-03-25")}
-        bufferMonths={[3, 2]}
-        // endAt={dayjs("2025-06-28")}
-        data={data}
-        width={800}
-        style={{
-          position: "relative",
-          left: -17,
-        }}
-        rowRender={(row, startDate, endDate, cellWidth) => {
-          const rowStart = dayjs(row.createdAt);
-          let diff = rowStart.diff(startDate, "day");
-          if (diff < 0) {
-            diff -= 1;
-          }
-          if (
-            rowStart.startOf("date").valueOf() >
-            endDate.startOf("date").valueOf()
-          ) {
-            return null;
-          }
-          return (
-            <div
-              title={
-                rowStart.format("YYYY-MM-DD") +
-                "___" +
-                diff +
-                "___" +
-                startDate.format("YYYY-MM-DD")
-              }
-              style={{
-                position: "absolute",
-                height: 20,
-                margin: "auto",
-                width: 300,
-                transform: `translateX(${diff * cellWidth}px) `,
-                backgroundColor: "pink",
-              }}
-            >
-              {rowStart.format("YYYY-MM-DD")} -offset : {diff}
-            </div>
-          );
-        }}
-      />
+          }}
+        />
+      </div>
     </div>
   );
 };
