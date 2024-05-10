@@ -47,10 +47,18 @@ type AnyObject = {
   [key: string]: any;
 };
 
+// todo 在内层进行分组
+
 export enum GanttMode {
   Month,
   Week,
 }
+
+export type GroupOption<T> = {
+  groupHeaderBuilder?: (groupData: T[]) => any;
+  groupBuilder: ((data: T[]) => { [groupKey: string]: T[] }) | keyof T;
+};
+
 export type HeadRender<T> = {
   showYearRow?: boolean;
   height?: [number] | [number, number] | [number, number, number];
@@ -88,6 +96,7 @@ type VirtualGanttProps<T = AnyObject> = {
   isHoliday?: (date: Dayjs) => boolean;
   isInfiniteX?: boolean;
   isWeekStartMonday?: boolean;
+  groupOptions?: Array<GroupOption<T>>;
 } & (
   | {
       startAt: Dayjs;
