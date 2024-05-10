@@ -186,13 +186,14 @@ export const getGanttStyleByStart = (
   startDate: Dayjs,
   cellWidth: number
 ) => {
-  let diff = bartStartAt.startOf('date').diff(startDate.startOf('date'), "day");
+  let diff = bartStartAt.startOf("date").diff(startDate.startOf("date"), "day");
   if (diff < 0) {
     diff -= 1;
   }
   const style: CSSProperties = {
     position: "absolute",
-    transform: `translateX(${diff * cellWidth}px) `,
+    // transform: `translateX(${}px) `,
+    left: diff * cellWidth,
   };
   return { style, diff };
 };

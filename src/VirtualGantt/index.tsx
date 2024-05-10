@@ -36,6 +36,7 @@ import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
 import { GroupOption } from "../Gantt";
+import { GanttBarProps } from "../GantBar";
 
 dayjs.extend(advancedFormat);
 
@@ -72,17 +73,9 @@ export type BufferMonths = [number] | [number, number];
 type VirtualGanttProps<T = AnyObject> = {
   mode?: GanttMode;
   data: T[];
-  rowRender: (
-    data: any,
-    start: Dayjs,
-    end: Dayjs,
-    cellWidth: number,
-    getGanttStyleByStart: (
-      bartStartAt: Dayjs,
-      startDate: Dayjs,
-      cellWidth: number
-    ) => { style: CSSProperties; diff: number }
-  ) => ReactNode;
+  rowComponent: React.ForwardRefExoticComponent<
+    GanttBarProps & React.RefAttributes<unknown>
+  >;
   width?: number;
   style?: CSSProperties;
   rowHeight?: number;
@@ -121,7 +114,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     startAt,
     endAt,
     width,
-    rowRender,
+    rowComponent,
     headRender,
     style,
     isHoliday,
@@ -146,6 +139,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const [data, setData] = useState<TData | any>(originData);
 
   const parentRef = React.useRef<HTMLDivElement>(null);
+  const scrollBoxRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {}, [groupOptions, data]);
 
@@ -286,6 +280,8 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     return {};
   });
 
+  const barRefMap = useRef(new Map());
+
   return (
     <div
       ref={parentRef}
@@ -394,6 +390,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
 
         <div
           className="gantt-body"
+          ref={scrollBoxRef}
           style={{
             width: scrollWidth,
             zIndex: 2,
@@ -403,6 +400,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
             const row = rows[virtualRow.index] as Row<(typeof data)[0]>;
+            const Row = rowComponent;
 
             return (
               <div
@@ -415,18 +413,25 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                   }px)`,
                   flexDirection: "column",
                   justifyContent: "center",
-                  overflow: "hidden",
+                  width: 0,
+                  overflow: "visible",
                 }}
               >
-                {!!startDate &&
-                  !!endDate &&
-                  rowRender(
-                    row.original,
-                    startDate,
-                    endDate,
-                    cellWidth,
-                    getGanttStyleByStart
-                  )}
+                {!!startDate && !!endDate && (
+                  <Row
+                    linkIds={[row.original.id + 1, row.original.id + 2]}
+                    parentDom={scrollBoxRef.current}
+                    ref={(ref) => barRefMap.current.set(row.original.id, ref)}
+                    barRefMap={barRefMap.current}
+                    {...{
+                      row: row.original,
+                      startDate,
+                      endDate,
+                      cellWidth,
+                      getGanttStyleByStart,
+                    }}
+                  />
+                )}
               </div>
             );
           })}

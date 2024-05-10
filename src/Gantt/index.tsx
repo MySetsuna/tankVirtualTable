@@ -8,6 +8,8 @@ import { BufferMonths, GanttMode, VirtualGantt } from "../VirtualGantt";
 import dayjs, { Dayjs } from "dayjs";
 import { get, groupBy } from "lodash";
 import Xarrow, { useXarrow, Xwrapper } from "react-xarrows";
+import Draggable from "react-draggable";
+import { GnttBar } from "../GantBar";
 
 type AnyObject = {
   [key: string]: any;
@@ -196,53 +198,7 @@ export const Gantt = (props: GanttProps) => {
               position: "relative",
               left: -17,
             }}
-            rowRender={(
-              row,
-              startDate,
-              endDate,
-              cellWidth,
-              getGanttStyleByStart
-            ) => {
-              const rowStart = dayjs(row.createdAt);
-              if (
-                rowStart.startOf("date").valueOf() >
-                endDate.startOf("date").valueOf()
-              ) {
-                return null;
-              }
-              const { style, diff } = getGanttStyleByStart(
-                rowStart,
-                startDate,
-                cellWidth
-              );
-
-              const diff2 = rowStart.diff(startDate, "day");
-              return (
-                <div
-                  title={
-                    rowStart.format("YYYY-MM-DD") +
-                    "___" +
-                    startDate.format("YYYY-MM-DD")
-                  }
-                  id={`gantt_bar__${row.id}`}
-                  style={{
-                    height: 20,
-                    margin: "auto",
-                    width: 300,
-                    backgroundColor: "pink",
-                    ...style,
-                  }}
-                >
-                  <Xarrow
-                    start={`gantt_bar__${row.id}`} //can be react ref
-                    end={`gantt_bar__${row.id + 1}`} //or an id
-                  />
-                  {rowStart.format("YYYY-MM-DD")}-
-                  {startDate.format("YYYY-MM-DD")}-{diff}-{diff * cellWidth}---
-                  {diff2}
-                </div>
-              );
-            }}
+            rowComponent={GnttBar}
           />
         </Xwrapper>
       </div>
