@@ -1,14 +1,73 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ScrollMirror from "scrollmirror";
 import { VirtualTable } from "../VirtualTable";
 import { makeData } from "../makeData";
 import { TextField } from "@radix-ui/themes";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
-import { GanttMode, VirtualGantt } from "../VirtualGantt";
-import dayjs from "dayjs";
-const mdata = makeData(10);
-export const Gantt = () => {
-  const [data, setData] = React.useState(mdata);
+import { BufferMonths, GanttMode, VirtualGantt } from "../VirtualGantt";
+import dayjs, { Dayjs } from "dayjs";
+import { get, groupBy } from "lodash";
+
+type AnyObject = {
+  [key: string]: any;
+};
+
+type BaseGroupHeaderData = { key: string; value?: AnyObject };
+
+export type GroupOption<T, G extends BaseGroupHeaderData = any> = {
+  groupHeaderBuilder?: (groupData: T[]) => G;
+  groupKey: ((data: T) => string) | keyof T;
+};
+
+export const EMPTY_TAG = "空";
+export const SPLIT_TAG = "%-@-%";
+
+type GanttProps<T = AnyObject> = {
+  data: T[];
+  groupOptions?: Array<GroupOption<T>>;
+};
+
+export const Gantt = (props: GanttProps) => {
+  // const [data, setData] = React.useState(mdata);
+  const { data, groupOptions } = props;
+  type TData = (typeof data)[0];
+  type GData = ReturnType<
+    NonNullable<NonNullable<typeof groupOptions>[0]["groupHeaderBuilder"]>
+  >;
+
+  const [groupData, setGroupData] = useState<
+    Array<TData | GData> | undefined
+  >();
+
+  useEffect(() => {
+    if (groupOptions) {
+      const allGroupMap = new Map<string, TData[]>();
+      const keys: Array<{ key: string }> = [];
+      data.forEach((item) => {
+        const groupKeys = groupOptions.map(({ groupKey }) => {
+          let key: string = EMPTY_TAG;
+          if (typeof groupKey === "string" || typeof groupKey === "number") {
+            key = get(item, groupKey, EMPTY_TAG);
+          } else {
+            key = groupKey(item);
+          }
+
+          return key;
+        });
+        const uninKey = groupKeys.join("%-@-%");
+        const group = allGroupMap.get(uninKey) ?? [];
+        group.push(item);
+        // groupKeys.forEach((groupKey) => {
+        //   const group = allGroupMap.get(groupKey) ?? [];
+        //   group.push(item);
+        // });
+      });
+      Array.from(allGroupMap.entries()).sort(([aKey], [bKey]) => {
+        return aKey.localeCompare(bKey);
+      });
+    }
+  }, [groupOptions, data]);
+
   React.useEffect(() => {
     new ScrollMirror(document.querySelectorAll(".gantt-container"), {
       horizontal: false,
@@ -17,6 +76,9 @@ export const Gantt = () => {
   }, []);
 
   const [ganttMode, setGanttMode] = useState<GanttMode>(GanttMode.Week);
+
+  const [selectDate, setSelectDate] = useState<Dayjs>(dayjs());
+
   return (
     <div>
       <select
@@ -28,7 +90,22 @@ export const Gantt = () => {
         <option value={GanttMode.Month}>月</option>
         <option value={GanttMode.Week}>周</option>
       </select>
+      <input
+        type="date"
+        value={selectDate.format("YYYY-MM-DD")}
+        onChange={(event) => {
+          console.log(event, "event");
 
+          setSelectDate(dayjs(event.target.value));
+        }}
+      />
+      <button
+        onClick={() => {
+          setSelectDate(dayjs());
+        }}
+      >
+        Go to Today
+      </button>
       <div style={{ display: "flex" }}>
         <VirtualTable
           width={700}
@@ -107,9 +184,9 @@ export const Gantt = () => {
         />
         <VirtualGantt
           mode={ganttMode}
-          currentAt={dayjs("2024-12-25")}
+          currentAt={selectDate}
           bufferMonths={[3, 2]}
-          bufferDay={20}
+          bufferDay={40}
           // endAt={dayjs("2025-06-28")}
           data={data}
           width={800}
@@ -131,7 +208,13 @@ export const Gantt = () => {
             ) {
               return null;
             }
-            const style = getGanttStyleByStart(rowStart, startDate, cellWidth);
+            const { style, diff } = getGanttStyleByStart(
+              rowStart,
+              startDate,
+              cellWidth
+            );
+
+            const diff2 = rowStart.diff(startDate, "day");
             return (
               <div
                 title={
@@ -147,7 +230,8 @@ export const Gantt = () => {
                   ...style,
                 }}
               >
-                {rowStart.format("YYYY-MM-DD")}
+                {rowStart.format("YYYY-MM-DD")}-{startDate.format("YYYY-MM-DD")}
+                -{diff}-{diff * cellWidth}---{diff2}
               </div>
             );
           }}

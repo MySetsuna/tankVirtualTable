@@ -34,6 +34,7 @@ import weekOfYear from "dayjs/plugin/weekOfYear";
 import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
+import { GroupOption } from "../Gantt";
 
 dayjs.extend(advancedFormat);
 
@@ -54,11 +55,6 @@ export enum GanttMode {
   Week,
 }
 
-export type GroupOption<T> = {
-  groupHeaderBuilder?: (groupData: T[]) => any;
-  groupBuilder: ((data: T[]) => { [groupKey: string]: T[] }) | keyof T;
-};
-
 export type HeadRender<T> = {
   showYearRow?: boolean;
   height?: [number] | [number, number] | [number, number, number];
@@ -70,7 +66,7 @@ export type HeadRender<T> = {
   month?: (date: Dayjs) => ColumnDefTemplate<HeaderContext<T, unknown>>;
 };
 
-type BufferMonths = [number] | [number, number];
+export type BufferMonths = [number] | [number, number];
 
 type VirtualGanttProps<T = AnyObject> = {
   mode?: GanttMode;
@@ -84,7 +80,7 @@ type VirtualGanttProps<T = AnyObject> = {
       bartStartAt: Dayjs,
       startDate: Dayjs,
       cellWidth: number
-    ) => CSSProperties
+    ) => { style: CSSProperties; diff: number }
   ) => ReactNode;
   width?: number;
   style?: CSSProperties;
@@ -119,7 +115,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     bufferDay = 10,
     rowHeight = 34,
     cellWidth = 50,
-    data,
+    data: originData,
     currentAt,
     startAt,
     endAt,
@@ -128,25 +124,31 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     headRender,
     style,
     isHoliday,
-    bufferMonths,
+    bufferMonths: bufferM,
     isInfiniteX,
     isWeekStartMonday,
+    groupOptions,
   } = props;
-  type TData = (typeof data)[0];
+  type TData = (typeof originData)[0];
 
   const [columns, setColumns] = useState<ColumnDef<any>[]>([]);
   const [startDate, setStartDate] = useState<Dayjs | undefined>(
     startAt?.clone()
   );
-  const [endDate, setEndDate] = useState<Dayjs | undefined>(endAt?.clone());
-  const [currentDate, setCurrentDate] = useState<Dayjs | undefined>(
-    currentAt?.clone()
+  const [bufferMonths, setBufferMonths] = useState<BufferMonths>(
+    bufferM ?? [3, 2]
   );
+  const [endDate, setEndDate] = useState<Dayjs | undefined>(endAt?.clone());
+  const [currentDate, setCurrentDate] = useState<Dayjs | undefined>(currentAt);
   const scrollToTimer = useRef<NodeJS.Timeout | null>(null);
   const scrollCallback = useRef<(() => void) | null>(() => {});
+  const [data, setData] = useState<TData | any>(originData);
 
   const parentRef = React.useRef<HTMLDivElement>(null);
 
+  useEffect(() => {}, [groupOptions, data]);
+
+  // 是否使用同步effect？使用useEffect会使内容闪烁
   useLayoutEffect(() => {
     if (startDate && endDate) {
       const columns = buildGanttHeader<TData>(
@@ -157,12 +159,10 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         cellWidth,
         isWeekStartMonday
       );
-      console.log(startDate.format("YYYYMMDD"), endDate.format("YYYYMMDD"));
-
       setColumns(columns);
       scrollCallback.current?.();
     }
-  }, [startDate, endDate, headRender, cellWidth, isWeekStartMonday]);
+  }, [startDate, endDate, headRender, cellWidth, isWeekStartMonday, mode]);
 
   useEffect(() => {
     if (startAt && endAt) {
@@ -172,7 +172,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   }, [startAt, endAt]);
 
   useEffect(() => {
-    setCurrentDate(currentAt);
+    setCurrentDate(currentAt?.isValid() ? currentAt : dayjs());
   }, [currentAt]);
 
   useEffect(() => {
@@ -181,6 +181,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         currentDate,
         bufferMonths
       );
+
       setStartDate(startAt);
       setEndDate(endAt);
       if (parentRef.current && isInfiniteX) {
@@ -269,6 +270,9 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     0
   );
 
+  const bodyVisibleHeight =
+    (parentRef.current?.clientHeight ?? 0) - headerHeight;
+
   const ganttBodyHeight = rowVirtualizer.getTotalSize();
   const scrollHeight = ganttBodyHeight + headerHeight;
   const scrollWidth = table
@@ -353,12 +357,11 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                               ? {
                                   position: "sticky",
                                   left: 0,
-                                  width: "min-content",
+                                  width: 0,
                                   whiteSpace: "nowrap",
                                   height,
 
                                   overflow: "visible",
-                                  padding: "0 5px",
                                 }
                               : { height }
                           }
@@ -366,8 +369,9 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                           <div
                             style={{
                               position: "absolute",
-                              overflow: "visible",
-                              width: "0px",
+                              overflow: "hidden",
+                              padding: "0 5px",
+                              width: header.getSize(),
                             }}
                           >
                             {flexRender(
@@ -391,6 +395,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             width: scrollWidth,
             zIndex: 2,
             height: ganttBodyHeight,
+            position: "relative",
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
@@ -430,10 +435,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             display: "flex",
             top: headerHeight,
             width: scrollWidth,
-            height: Math.max(
-              ganttBodyHeight,
-              parentRef.current?.clientHeight ?? 0
-            ),
+            height: Math.max(ganttBodyHeight, bodyVisibleHeight),
             zIndex: 1,
             backgroundColor: "white",
             pointerEvents: "none",
@@ -444,6 +446,10 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             const dayNumber = date.get("day");
             const isWeekend = dayNumber === 0 || dayNumber === 6;
             const isRest = isHoliday?.(date) || isWeekend;
+
+            const isCurrentDate =
+              currentAt?.format("YYYY-MM-DD") === date.format("YYYY-MM-DD");
+
             return (
               <div
                 key={header.id}
@@ -456,9 +462,31 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                   borderRight: "1px solid black",
                   // pointerEvents: "none",
                   backgroundColor: isRest ? "#acacac60" : "white",
-                  zIndex: -1,
+                  zIndex: isCurrentDate ? 2 : -1,
+                  position: "relative",
                 }}
-              ></div>
+              >
+                {isCurrentDate && (
+                  <>
+                    <div
+                      style={{
+                        height: "100%",
+                        width: 5,
+                        backgroundColor: "green",
+                      }}
+                    ></div>
+                    <div
+                      style={{
+                        color: "green",
+                        position: "absolute",
+                        left: "100%",
+                      }}
+                    >
+                      this is CurrentDate
+                    </div>
+                  </>
+                )}
+              </div>
             );
           })}
         </div>
@@ -515,14 +543,15 @@ VirtualGantt.defaultProps = {
         // return date.format(
         //   props.header.index && monthNumber ? "M月" : "YYYY-MM"
         // );
+        const end = date.add(6, "day");
+        const format =
+          end.get("year") != date.get("year") ? "YYYY-MM-DD" : "MM-DD";
 
         return (
           `${date.locale(timezone).weekYear()}年` +
           " " +
           `${date.locale(timezone).week()}周 ` +
-          `${date.format("YYYY-MM-DD")}~${date
-            .add(6, "day")
-            .format("YYYY-MM-DD")}`
+          `${date.format(format)}~${date.add(6, "day").format(format)}`
         );
       };
     },

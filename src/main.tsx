@@ -263,6 +263,8 @@ function ReactTableVirtualized() {
   );
 }
 
+const mdata = makeData(50);
+
 function App() {
   return (
     <Theme>
@@ -273,7 +275,7 @@ function App() {
           calculate the translateY pixel count different and base it off the the
           index.
         </p>
-        <Gantt />
+        <Gantt data={mdata} />
         <br />
         <br />
         {process.env.NODE_ENV === "development" ? (
