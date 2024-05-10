@@ -10,6 +10,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import Xarrow from "react-xarrows";
 import React, {
   CSSProperties,
   ReactNode,
@@ -222,6 +223,8 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     estimateSize: () => rowHeight,
     overscan,
   });
+
+  const lineMap = useRef(new Map());
 
   const handleScroll = useCallback(() => {
     if (!scrollCallback.current && isInfiniteX && parentRef.current) {
