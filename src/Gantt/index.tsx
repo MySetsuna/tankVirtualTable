@@ -111,7 +111,8 @@ export const Gantt = (props: GanttProps) => {
       </button>
       <div style={{ display: "flex" }}>
         <VirtualTable
-          width={700}
+          rowHeight={40}
+          width={600}
           columns={[
             {
               accessorKey: "id",
@@ -187,17 +188,38 @@ export const Gantt = (props: GanttProps) => {
         />
         <Xwrapper>
           <VirtualGantt
+            rowHeight={40}
+            getFrontLinkIds={(row) => {
+              return [`${row.id + 2}`, `${row.id + 1}`];
+            }}
+            getPostLinkIds={(row) => {
+              return [`${row.id - 1}`, `${row.id - 2}`];
+            }}
+            getRowId={(row) => `${row.id}`}
+            getBarEnd={(row: TData) =>
+              row.endAt ? dayjs(row.endAt) : undefined
+            }
+            getBarStart={(row: TData) =>
+              row.createdAt ? dayjs(row.createdAt) : undefined
+            }
             mode={ganttMode}
             currentAt={selectDate}
             bufferMonths={[3, 2]}
             bufferDay={40}
             // endAt={dayjs("2025-06-28")}
             data={data}
-            width={800}
+            width={1200}
             style={{
               position: "relative",
               left: -17,
             }}
+            barStyle={(row, index) => ({
+              backgroundColor: `rgba(${row.id + 200}, ${90 + index * 6}, ${
+                index + row.id + 100
+              }, 1)`,
+              overflow: "hidden",
+            })}
+            barClassName="gantt-bar77"
             rowComponent={GnttBar}
           />
         </Xwrapper>

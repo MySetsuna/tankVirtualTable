@@ -21,6 +21,7 @@
     "react-draggable": "^4.4.6",
     "react-leader-line": "^1.0.5",
     "react-xarrows": "^2.0.2",
+    "reactflow": "^11.11.3",
     "scrollmirror": "^0.1.0"
   },
   "devDependencies": {

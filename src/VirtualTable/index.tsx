@@ -26,11 +26,12 @@ type VirtualTableProps<T = AnyObject> = {
     rowIndex: number;
     rowKey: string;
   }) => ReactNode;
-  width?: 700;
+  width: number;
+  rowHeight: number;
 };
 
 export const VirtualTable = (props: VirtualTableProps) => {
-  const { columns, data, cellRender, width } = props;
+  const { columns, data, cellRender, width, rowHeight } = props;
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
@@ -58,7 +59,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 34,
+    estimateSize: () => rowHeight,
     overscan: 10,
   });
 

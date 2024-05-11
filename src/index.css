@@ -9,16 +9,20 @@ html {
   font-size: 14px;
 }
 
-body {
+/* body {
   padding: 1rem;
-}
+} */
 
 .container {
-  height: 600px;
+  height: 900px;
   overflow: auto;
   
 }
 
 .gantt-line-body{
  cursor: pointer;
+}
+
+.react-flow__pane{
+  cursor: auto !important;
 }

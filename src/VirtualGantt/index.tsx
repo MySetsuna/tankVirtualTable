@@ -10,15 +10,17 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import Xarrow from "react-xarrows";
+import Xarrow, { useXarrow } from "react-xarrows";
 import React, {
   CSSProperties,
   ReactNode,
+  RefObject,
   forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -30,13 +32,15 @@ import {
   getGanttStyleByStart,
   getRangeAtByCurrentAt,
 } from "./utils";
-import { debounce } from "lodash";
+import { debounce, throttle } from "lodash";
 import weekOfYear from "dayjs/plugin/weekOfYear";
 import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
 import { GroupOption } from "../Gantt";
-import { GanttBarProps } from "../GantBar";
+import { GanttBarInstance, GanttBarProps } from "../GantBar";
+import { GanttBarLines } from "../GantBarLines";
+import Flow from "../ReactFlowDemo";
 
 dayjs.extend(advancedFormat);
 
@@ -46,7 +50,7 @@ dayjs.extend(weekYear);
 
 dayjs.extend(weekday);
 
-type AnyObject = {
+export type AnyObject = {
   [key: string]: any;
 };
 
@@ -56,6 +60,8 @@ export enum GanttMode {
   Month,
   Week,
 }
+
+export type BarRefMap = Map<string, GanttBarInstance | null>;
 
 export type HeadRender<T> = {
   showYearRow?: boolean;
@@ -74,7 +80,7 @@ type VirtualGanttProps<T = AnyObject> = {
   mode?: GanttMode;
   data: T[];
   rowComponent: React.ForwardRefExoticComponent<
-    GanttBarProps & React.RefAttributes<unknown>
+    GanttBarProps<AnyObject> & React.RefAttributes<GanttBarInstance<AnyObject>>
   >;
   width?: number;
   style?: CSSProperties;
@@ -87,6 +93,14 @@ type VirtualGanttProps<T = AnyObject> = {
   isInfiniteX?: boolean;
   isWeekStartMonday?: boolean;
   groupOptions?: Array<GroupOption<T>>;
+  getBarStart: (row: T) => Dayjs | undefined;
+  getBarEnd: (row: T) => Dayjs | undefined;
+  getFrontLinkIds: (row: T) => string[];
+  getPostLinkIds: (row: T) => string[];
+  getRowId: (row: T) => string;
+  minBarRange?: number;
+  barStyle?: CSSProperties | ((row: T, index: number) => CSSProperties);
+  barClassName?: string | ((row: T, index: number) => string);
 } & (
   | {
       startAt: Dayjs;
@@ -109,6 +123,9 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     bufferDay = 10,
     rowHeight = 34,
     cellWidth = 50,
+    minBarRange = 1,
+    barStyle,
+    barClassName,
     data: originData,
     currentAt,
     startAt,
@@ -122,6 +139,11 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     isInfiniteX,
     isWeekStartMonday,
     groupOptions,
+    getBarStart,
+    getBarEnd,
+    getFrontLinkIds,
+    getPostLinkIds,
+    getRowId,
   } = props;
   type TData = (typeof originData)[0];
 
@@ -140,6 +162,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
 
   const parentRef = React.useRef<HTMLDivElement>(null);
   const scrollBoxRef = React.useRef<HTMLDivElement>(null);
+  const barRefMap = useRef<BarRefMap>(new Map());
 
   useEffect(() => {}, [groupOptions, data]);
 
@@ -218,9 +241,11 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     overscan,
   });
 
-  const lineMap = useRef(new Map());
+  const [scrollTop, setScrollTop] = useState<number>(0);
+  const [isUpScroll, setIsUpScroll] = useState<boolean>(false);
 
   const handleScroll = useCallback(() => {
+    setScrollTop(parentRef.current!.scrollTop);
     if (!scrollCallback.current && isInfiniteX && parentRef.current) {
       const toLeft = parentRef.current?.scrollLeft === 0;
       const toRight =
@@ -250,7 +275,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         return;
       }
     }
-  }, [cellWidth, bufferDay]);
+  }, [cellWidth, bufferDay, scrollTop]);
 
   const visibleHeaderGroups = table
     .getHeaderGroups()
@@ -279,8 +304,6 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   useImperativeHandle(ref, () => {
     return {};
   });
-
-  const barRefMap = useRef(new Map());
 
   return (
     <div
@@ -394,13 +417,23 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
           style={{
             width: scrollWidth,
             zIndex: 2,
-            height: ganttBodyHeight,
+            height: 0,
             position: "relative",
+            display: "none",
           }}
         >
-          {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
+          {rowVirtualizer.getVirtualItems().map((virtualRow, index, arr) => {
             const row = rows[virtualRow.index] as Row<(typeof data)[0]>;
             const Row = rowComponent;
+            const rowId = getRowId(row.original);
+            const reverseIndex = arr.length - 1 - index;
+            // const isHiddenLink = arr.length - index < 3;
+            // console.log(
+            //   parentRef.current!.scrollHeight,
+            //   scrollTop + parentRef.current!.clientHeight,
+            //   "parentRef.current?.offsetHeight-parentRef.current?.scrollTop",
+            //   parentRef.current?.clientHeight
+            // );
 
             return (
               <div
@@ -419,10 +452,32 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
               >
                 {!!startDate && !!endDate && (
                   <Row
-                    linkIds={[row.original.id + 1, row.original.id + 2]}
+                    frontLinkIds={getFrontLinkIds(row.original)}
+                    postLinkIds={getPostLinkIds(row.original)}
                     parentDom={scrollBoxRef.current}
-                    ref={(ref) => barRefMap.current.set(row.original.id, ref)}
-                    barRefMap={barRefMap.current}
+                    barStart={getBarStart(row.original)}
+                    barEnd={getBarEnd(row.original)}
+                    minBarRange={minBarRange}
+                    index={index}
+                    reverseIndex={reverseIndex}
+                    ref={(ref) => {
+                      barRefMap.current?.set(rowId, ref);
+                    }}
+                    setBarRefMap={(rowId, ref) =>
+                      barRefMap.current?.set(rowId, ref)
+                    }
+                    rowId={rowId}
+                    barRefMap={barRefMap}
+                    barClassName={
+                      typeof barClassName === "string"
+                        ? barClassName
+                        : barClassName?.(row.original, index)
+                    }
+                    barStyle={
+                      typeof barStyle === "object"
+                        ? barStyle
+                        : barStyle?.(row.original, index)
+                    }
                     {...{
                       row: row.original,
                       startDate,
@@ -435,6 +490,27 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
               </div>
             );
           })}
+          {/* <GanttBarLines
+            barRefMap={barRefMap}
+            onLinkRemove={(start, end) => {
+              console.log(start, end, "isUpScroll", isUpScroll);
+            }}
+          /> */}
+        </div>
+        <div
+          className="gantt-flow"
+          style={{
+            position: "absolute",
+            display: "flex",
+            top: headerHeight,
+            width: scrollWidth,
+            height: Math.max(ganttBodyHeight, bodyVisibleHeight),
+            zIndex: 2,
+            backgroundColor: "white",
+            // pointerEvents: "none",
+          }}
+        >
+          <Flow />
         </div>
         <div
           className="gantt-background"
@@ -446,7 +522,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             height: Math.max(ganttBodyHeight, bodyVisibleHeight),
             zIndex: 1,
             backgroundColor: "white",
-            pointerEvents: "none",
+            // pointerEvents: "none",
           }}
         >
           {leafHeaderGroup?.headers.map((header) => {
@@ -513,6 +589,7 @@ VirtualGantt.defaultProps = {
   cellWidth: 60,
   isInfiniteX: true,
   isWeekStartMonday: true,
+  minBarRange: 1,
   headRender: {
     showYearRow: false,
     height: [30],

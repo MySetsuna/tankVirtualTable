@@ -181,19 +181,51 @@ export const getRangeAtByCurrentAt = <T>(
   return { startAt, endAt };
 };
 
-export const getGanttStyleByStart = (
-  bartStartAt: Dayjs,
-  startDate: Dayjs,
-  cellWidth: number
+export const getDayDiff = (
+  date?: Dayjs,
+  offsetDate?: Dayjs,
+  defaultDiff = 1
 ) => {
-  let diff = bartStartAt.startOf("date").diff(startDate.startOf("date"), "day");
-  if (diff < 0) {
-    diff -= 1;
+  if (date && offsetDate) {
+    let diff = date.startOf("date").diff(offsetDate.startOf("date"), "day");
+    if (diff < 0) {
+      diff -= 1;
+    }
+    return diff;
+  } else if (date || offsetDate) {
+    return defaultDiff;
   }
-  const style: CSSProperties = {
-    position: "absolute",
-    // transform: `translateX(${}px) `,
-    left: diff * cellWidth,
+  return 0;
+};
+
+export type GanttStyleByStartParams = {
+  barStart?: Dayjs;
+  barEnd?: Dayjs;
+  startDate: Dayjs;
+  cellWidth: number;
+  minBarRange: number;
+};
+
+export const getGanttStyleByStart = ({
+  barStart,
+  barEnd,
+  startDate,
+  cellWidth,
+  minBarRange,
+}: GanttStyleByStartParams) => {
+  if (barStart || barEnd) {
+    const diff = getDayDiff(barStart ?? barEnd?.add(-1, "day"), startDate, 0);
+    const style: CSSProperties = {
+      position: "absolute",
+      // transform: `translateX(${}px) `,
+      left: diff * cellWidth,
+    };
+    return { style, diff };
+  }
+  return {
+    style: {
+      display: "none",
+    },
+    diff: 0,
   };
-  return { style, diff };
 };
