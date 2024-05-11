@@ -1,18 +1,59 @@
-import React, { useCallback } from "react";
-import ReactFlow, { addEdge, useEdgesState, useNodesState } from "reactflow";
+import React, { useCallback, useEffect, useState } from "react";
+import ReactFlow, {
+  NodeChange,
+  addEdge,
+  applyNodeChanges,
+  useEdgesState,
+  useNodesState,
+} from "reactflow";
 import "reactflow/dist/style.css";
+import { GanttBar } from "../GanttBar";
 
-import initialNodes from "./nodes";
-import initialEdges from "./edges";
+const nodeTypes = {
+  gantbar: GanttBar,
+};
 
-function Flow({ children }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+function Flow({ children, initialNodes, celWidth }) {
+  const [nodes, setNodes] = useState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const onConnect = useCallback(
     (connection) => setEdges((eds) => addEdge(connection, eds)),
     [setEdges]
   );
+
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((nds) => {
+      const parsedChanges = changes.map((change) => {
+        if (
+          change.type === "position" &&
+          change.position &&
+          change.positionAbsolute
+        ) {
+          const fixedY = nds.find((node) => change.id === node.id)?.data.fixedY;
+
+          if (fixedY) {
+            change.position = {
+              x: change.position.x,
+              y: fixedY,
+            };
+            change.positionAbsolute = {
+              x: change.positionAbsolute.x,
+              y: fixedY,
+            };
+          }
+        }
+
+        return change;
+      });
+
+      return applyNodeChanges(parsedChanges, nds);
+    });
+  }, []);
+
+  useEffect(() => {
+    setNodes(initialNodes);
+  }, [initialNodes]);
 
   return (
     <ReactFlow
@@ -28,6 +69,7 @@ function Flow({ children }) {
       zoomOnDoubleClick={false}
       preventScrolling={false}
       zoomActivationKeyCode={null}
+      nodeTypes={nodeTypes}
       panActivationKeyCode={null}
     >
       {children}

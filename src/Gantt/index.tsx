@@ -10,6 +10,13 @@ import { get, groupBy } from "lodash";
 import Xarrow, { useXarrow, Xwrapper } from "react-xarrows";
 import Draggable from "react-draggable";
 import { GnttBar } from "../GantBar";
+import {
+  getBarEnd,
+  getBarStart,
+  getFrontLinkIds,
+  getPostLinkIds,
+  getRowId,
+} from "./use-lib";
 
 type AnyObject = {
   [key: string]: any;
@@ -189,22 +196,14 @@ export const Gantt = (props: GanttProps) => {
         <Xwrapper>
           <VirtualGantt
             rowHeight={40}
-            getFrontLinkIds={(row) => {
-              return [`${row.id + 2}`, `${row.id + 1}`];
-            }}
-            getPostLinkIds={(row) => {
-              return [`${row.id - 1}`, `${row.id - 2}`];
-            }}
-            getRowId={(row) => `${row.id}`}
-            getBarEnd={(row: TData) =>
-              row.endAt ? dayjs(row.endAt) : undefined
-            }
-            getBarStart={(row: TData) =>
-              row.createdAt ? dayjs(row.createdAt) : undefined
-            }
+            getFrontLinkIds={getFrontLinkIds}
+            getPostLinkIds={getPostLinkIds}
+            getRowId={getRowId}
+            getBarEnd={getBarEnd}
+            getBarStart={getBarStart}
             mode={ganttMode}
             currentAt={selectDate}
-            bufferMonths={[3, 2]}
+            bufferMonths={[1, 2]}
             bufferDay={40}
             // endAt={dayjs("2025-06-28")}
             data={data}

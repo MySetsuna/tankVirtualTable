@@ -1992,7 +1992,7 @@ react@^18.2.0:
 
 reactflow@^11.11.3:
   version "11.11.3"
-  resolved "https://mirrors.tencent.com/npm/reactflow/-/reactflow-11.11.3.tgz#5e8d8b395bd443c6d10d7cef2101866ed185a1e0"
+  resolved "https://registry.yarnpkg.com/reactflow/-/reactflow-11.11.3.tgz#5e8d8b395bd443c6d10d7cef2101866ed185a1e0"
   integrity sha512-wusd1Xpn1wgsSEv7UIa4NNraCwH9syBtubBy4xVNXg3b+CDKM+sFaF3hnMx0tr0et4km9urIDdNvwm34QiZong==
   dependencies:
     "@reactflow/background" "11.3.13"

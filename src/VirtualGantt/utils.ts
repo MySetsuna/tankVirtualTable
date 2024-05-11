@@ -1,15 +1,19 @@
 import dayjs, { Dayjs } from "dayjs";
-import { GanttMode, HeadRender } from ".";
+import { AnyObject, GanttMode, HeadRender } from ".";
 import {
   ColumnDef,
   ColumnDefTemplate,
   HeaderContext,
 } from "@tanstack/react-table";
 import { CSSProperties, ReactNode } from "react";
+import { Node } from "reactflow";
+import { VirtualItem } from "@tanstack/react-virtual";
+import { Row } from "@tanstack/react-table";
 import weekOfYear from "dayjs/plugin/weekOfYear";
 import weekYear from "dayjs/plugin/weekYear";
 import "dayjs/locale/zh-cn";
 import advancedFormat from "dayjs/plugin/advancedFormat";
+import { getRowId } from "../Gantt/use-lib";
 dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
@@ -184,7 +188,7 @@ export const getRangeAtByCurrentAt = <T>(
 export const getDayDiff = (
   date?: Dayjs,
   offsetDate?: Dayjs,
-  defaultDiff = 1
+  defaultDiff = 0
 ) => {
   if (date && offsetDate) {
     let diff = date.startOf("date").diff(offsetDate.startOf("date"), "day");
@@ -228,4 +232,54 @@ export const getGanttStyleByStart = ({
     },
     diff: 0,
   };
+};
+
+export const getNodes = (
+  rows: Row<AnyObject>[],
+  virtualItems: VirtualItem[],
+  getDayDiff: (
+    date?: Dayjs,
+    offsetDate?: Dayjs,
+    defaultDiff?: number
+  ) => number,
+  startDate: Dayjs,
+  getBarStart: (row: AnyObject) => Dayjs | undefined,
+  getBarEnd: (row: AnyObject) => Dayjs | undefined,
+  cellWidth: number,
+  minBarRange: number,
+  margin = 4
+): Node<AnyObject>[] => {
+  const nodes: Node<AnyObject>[] = virtualItems.map((virtualRow, index) => {
+    const row = rows[virtualRow.index] as Row<AnyObject>;
+    const id = getRowId(row.original);
+    const barStart = getBarStart(row.original);
+    const barEnd = getBarEnd(row.original);
+    const height = virtualRow.size - margin * 2;
+    const y = virtualRow.start + margin;
+    const width = getDayDiff(barStart, barEnd, minBarRange) * cellWidth;
+    const diff = getDayDiff(barStart ?? barEnd?.add(-1, "day"), startDate, 0);
+
+    return {
+      id,
+      // height,
+      // width,
+      data: {
+        original: row,
+        fixedY: y,
+        maxHeight: height,
+        minHeight: height,
+        minWidth: minBarRange * cellWidth,
+      },
+      position: {
+        x: diff * cellWidth,
+        y,
+      },
+      style: {
+        height,
+        width,
+      },
+      type: "gantbar",
+    };
+  });
+  return nodes;
 };

@@ -26,3 +26,6 @@ html {
 .react-flow__pane{
   cursor: auto !important;
 }
+.react-flow__renderer{
+  pointer-events: none;
+}

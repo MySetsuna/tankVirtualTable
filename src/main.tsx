@@ -26,10 +26,6 @@ const mdata = makeData(50);
 function App() {
   return (
     <>
-      <div style={{width:'100vw',height:'100vh'}}>
-        <Flow />
-      </div>
-
       <Gantt data={mdata} />
     </>
   );
