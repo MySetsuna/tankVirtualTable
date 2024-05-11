@@ -510,69 +510,70 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             // pointerEvents: "none",
           }}
         >
-          <Flow />
-        </div>
-        <div
-          className="gantt-background"
-          style={{
-            position: "absolute",
-            display: "flex",
-            top: headerHeight,
-            width: scrollWidth,
-            height: Math.max(ganttBodyHeight, bodyVisibleHeight),
-            zIndex: 1,
-            backgroundColor: "white",
-            // pointerEvents: "none",
-          }}
-        >
-          {leafHeaderGroup?.headers.map((header) => {
-            const date = dayjs(header.id);
-            const dayNumber = date.get("day");
-            const isWeekend = dayNumber === 0 || dayNumber === 6;
-            const isRest = isHoliday?.(date) || isWeekend;
+          <Flow>
+            <div
+              className="gantt-background"
+              style={{
+                position: "absolute",
+                display: "flex",
+                // top: headerHeight,
+                width: scrollWidth,
+                height: Math.max(ganttBodyHeight, bodyVisibleHeight),
+                zIndex: 4,
+                backgroundColor: "white",
+                // pointerEvents: "none",
+              }}
+            >
+              {leafHeaderGroup?.headers.map((header) => {
+                const date = dayjs(header.id);
+                const dayNumber = date.get("day");
+                const isWeekend = dayNumber === 0 || dayNumber === 6;
+                const isRest = isHoliday?.(date) || isWeekend;
 
-            const isCurrentDate =
-              currentAt?.format("YYYY-MM-DD") === date.format("YYYY-MM-DD");
+                const isCurrentDate =
+                  currentAt?.format("YYYY-MM-DD") === date.format("YYYY-MM-DD");
 
-            return (
-              <div
-                key={header.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  width: header.getSize(),
-                  height: "100%",
-                  // backgroundColor: "red",
-                  borderRight: "1px solid black",
-                  // pointerEvents: "none",
-                  backgroundColor: isRest ? "#acacac60" : "white",
-                  zIndex: isCurrentDate ? 2 : -1,
-                  position: "relative",
-                }}
-              >
-                {isCurrentDate && (
-                  <>
-                    <div
-                      style={{
-                        height: "100%",
-                        width: 5,
-                        backgroundColor: "green",
-                      }}
-                    ></div>
-                    <div
-                      style={{
-                        color: "green",
-                        position: "absolute",
-                        left: "100%",
-                      }}
-                    >
-                      this is CurrentDate
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
+                return (
+                  <div
+                    key={header.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      width: header.getSize(),
+                      height: "100%",
+                      // backgroundColor: "red",
+                      borderRight: "1px solid black",
+                      // pointerEvents: "none",
+                      backgroundColor: isRest ? "#acacac60" : "white",
+                      zIndex: isCurrentDate ? 2 : -1,
+                      position: "relative",
+                    }}
+                  >
+                    {isCurrentDate && (
+                      <>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: 5,
+                            backgroundColor: "green",
+                          }}
+                        ></div>
+                        <div
+                          style={{
+                            color: "green",
+                            position: "absolute",
+                            left: "100%",
+                          }}
+                        >
+                          this is CurrentDate
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Flow>
         </div>
       </div>
     </div>

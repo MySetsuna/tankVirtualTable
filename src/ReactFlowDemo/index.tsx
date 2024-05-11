@@ -5,7 +5,7 @@ import "reactflow/dist/style.css";
 import initialNodes from "./nodes";
 import initialEdges from "./edges";
 
-function Flow() {
+function Flow({ children }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
@@ -29,7 +29,9 @@ function Flow() {
       preventScrolling={false}
       zoomActivationKeyCode={null}
       panActivationKeyCode={null}
-    ><div></div></ReactFlow>
+    >
+      {children}
+    </ReactFlow>
   );
 }
 
