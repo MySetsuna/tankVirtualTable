@@ -9,7 +9,7 @@ import dayjs, { Dayjs } from "dayjs";
 import { get, groupBy } from "lodash";
 import Xarrow, { useXarrow, Xwrapper } from "react-xarrows";
 import Draggable from "react-draggable";
-import { GnttBar } from "../GantBar";
+import { MyGnttBar } from "../MyGanttBar";
 import {
   getBarEnd,
   getBarStart,
@@ -212,14 +212,7 @@ export const Gantt = (props: GanttProps) => {
               position: "relative",
               left: -17,
             }}
-            barStyle={(row, index) => ({
-              backgroundColor: `rgba(${row.id + 200}, ${90 + index * 6}, ${
-                index + row.id + 100
-              }, 1)`,
-              overflow: "hidden",
-            })}
-            barClassName="gantt-bar77"
-            rowComponent={GnttBar}
+           
           />
         </Xwrapper>
       </div>

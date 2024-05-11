@@ -41,7 +41,7 @@ import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
 import { GroupOption } from "../Gantt";
-import { GanttBarInstance, GanttBarProps } from "../GantBar";
+import { GanttBarInstance, GanttBarProps } from "../MyGanttBar";
 import { GanttBarLines } from "../GantBarLines";
 import Flow from "../ReactFlowDemo";
 import { Node } from "reactflow";
@@ -83,9 +83,6 @@ export type BufferMonths = [number] | [number, number];
 type VirtualGanttProps<T = AnyObject> = {
   mode?: GanttMode;
   data: T[];
-  rowComponent: React.ForwardRefExoticComponent<
-    GanttBarProps<AnyObject> & React.RefAttributes<GanttBarInstance<AnyObject>>
-  >;
   width?: number;
   style?: CSSProperties;
   rowHeight?: number;
@@ -135,7 +132,6 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     startAt,
     endAt,
     width,
-    rowComponent,
     headRender,
     style,
     isHoliday,

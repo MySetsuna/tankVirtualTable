@@ -7,8 +7,9 @@ import {
   ResizeParams,
 } from "reactflow";
 
-export const GanttBar = ({ data }) => {
-  const { maxHeight, minWidth, minHeight } = data;
+export const GanttBarBox = ({ data }) => {
+  const { height, minWidth, index } = data;
+  const row = data.original;
   const onResizeEnd = (event: ResizeDragEvent, params: ResizeParams) => {
     console.log(params);
   };
@@ -16,13 +17,26 @@ export const GanttBar = ({ data }) => {
     <>
       <NodeResizer
         minWidth={minWidth}
-        minHeight={minHeight}
-        maxHeight={maxHeight}
-        keepAspectRatio={false}
+        minHeight={height}
+        maxHeight={height}
+        handleStyle={{
+          color: "red",
+        }}
         onResizeEnd={onResizeEnd}
       />
       <Handle type="target" position={Position.Left} />
-      <div style={{ padding: 10 }}>{data.original.id}</div>
+      <div
+        style={{
+          backgroundColor: `rgba(${row.id + 20}, ${30 + index * 4}, ${
+            index + row.id + 100
+          }, 1)`,
+          height,
+          overflow: "hidden",
+        }}
+        className="gantt-bar77"
+      >
+        {row.name}
+      </div>
       <Handle type="source" position={Position.Right} />
     </>
   );

@@ -1,5 +1,5 @@
 import React, { RefObject, useMemo, useState } from "react";
-import { GanttBarInstance } from "../GantBar";
+import { GanttBarInstance } from "../MyGanttBar";
 import Xarrow from "react-xarrows";
 import { debounce } from "lodash";
 type GanttBarLineProps = {

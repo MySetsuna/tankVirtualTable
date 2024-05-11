@@ -7,10 +7,10 @@ import ReactFlow, {
   useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { GanttBar } from "../GanttBar";
+import { GanttBarBox } from "../GanttBar";
 
 const nodeTypes = {
-  gantbar: GanttBar,
+  gantbar: GanttBarBox,
 };
 
 function Flow({ children, initialNodes, celWidth }) {

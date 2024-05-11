@@ -266,9 +266,10 @@ export const getNodes = (
       data: {
         original: row,
         fixedY: y,
-        maxHeight: height,
-        minHeight: height,
+        height,
+        width,
         minWidth: minBarRange * cellWidth,
+        index: virtualRow.index,
       },
       position: {
         x: diff * cellWidth,

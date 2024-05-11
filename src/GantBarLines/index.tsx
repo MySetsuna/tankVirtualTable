@@ -1,4 +1,4 @@
-import { GanttBarInstance } from "../GantBar";
+import { GanttBarInstance } from "../MyGanttBar";
 import { GanttBarLine } from "../GanttBarLine";
 import { BarRefMap } from "../VirtualGantt";
 import React from "react";
