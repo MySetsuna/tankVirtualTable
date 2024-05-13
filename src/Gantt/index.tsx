@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useState } from "react";
+import React, { Component, FC, ReactNode, useEffect, useState } from "react";
 import ScrollMirror from "scrollmirror";
 import { VirtualTable } from "../VirtualTable";
 import { makeData } from "../makeData";
@@ -18,6 +18,7 @@ import {
 } from "./use-lib";
 import { Row } from "@tanstack/react-table";
 import { GanttBar } from "../use/GanttBar";
+import { NodeProps } from "reactflow";
 
 type AnyObject = {
   [key: string]: any;
@@ -25,23 +26,23 @@ type AnyObject = {
 
 type BaseGroupHeaderData = { key: string; value?: AnyObject };
 
-export type GroupOption<T, G extends BaseGroupHeaderData = any> = {
-  groupHeaderBuilder?: (data: {
-    id: string;
-    subRows: Row<T>[];
-    leafRows: Row<T>[];
-  }) => G;
+interface GroupGanttComponentProps<T, D> {
+  group: D;
+  row: Row<T>;
+  fixedY: number;
+  fixedX: number;
+  height: number;
+  width: number;
+  minWidth: number;
+  index: number;
+}
+
+export type GroupOption<T, D extends BaseGroupHeaderData = any> = {
+  groupHeaderBuilder?: (row: Row<T>) => D;
   groupKey: ((data: T) => string) | keyof T;
   groupId: string;
-  fixedX?: boolean;
-  groupGanttComponent: (
-    data: any,
-    groupHeaderBuilder?: (data: {
-      id: string;
-      subRows: Row<T>[];
-      leafRows: Row<T>[];
-    }) => G
-  ) => ReactNode;
+  isFixedX?: boolean;
+  groupGanttComponent: FC<NodeProps<GroupGanttComponentProps<T, D>>>;
 };
 
 export const EMPTY_TAG = "空";

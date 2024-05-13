@@ -19,6 +19,13 @@ dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
 
+export interface GroupingRow<TData> {
+  leafRows: Row<TData[]>;
+  subRows: Row<TData[]>;
+  groupingColumnId: string;
+  groupingValue: any;
+}
+
 export const WEEKDAY_MAP = {
   0: "日",
   1: "一",
@@ -248,11 +255,10 @@ export const getNodes = (
   getBarEnd: (row: AnyObject) => Dayjs | undefined,
   cellWidth: number,
   minBarRange: number,
-  groupOptions: GroupOption<AnyObject>[],
+  groupOptions?: GroupOption<AnyObject>[],
   margin = 4
 ): Node<AnyObject>[] => {
   const nodes: Node<AnyObject>[] = virtualItems.map((virtualRow, index) => {
-    console.log(rows, "rows");
     /**
      * 
 groupingColumnId
@@ -263,7 +269,7 @@ groupingValue
 "2024-06"
      */
     const row = rows[virtualRow.index] as Row<AnyObject>;
-    const option = groupOptions.find(
+    const option = groupOptions?.find(
       ({ groupId }) => groupId === row.groupingColumnId
     );
     const id = getRowId(row.original);
@@ -279,9 +285,10 @@ groupingValue
       // height,
       // width,
       data: {
-        original:option?option.groupHeaderBuilder?.(row): row,
+        group: option ? option.groupHeaderBuilder?.(row) : undefined,
+        row,
         fixedY: y,
-        fixedX: row.groupingColumnId || undefined,
+        fixedX: option?.isFixedX ? diff * cellWidth : undefined,
         height,
         width,
         minWidth: minBarRange * cellWidth,
@@ -294,6 +301,7 @@ groupingValue
       style: {
         height,
         width,
+        cursor: option?.isFixedX ? "auto" : "grab",
       },
       type: row.groupingColumnId ?? "gantbar",
     };

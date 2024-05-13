@@ -186,15 +186,10 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
 
   const nodeTypes = useMemo(() => {
     return (groupOptions ?? []).reduce(
-      (
-        pre,
-        { groupId, groupGanttComponent: Component, groupHeaderBuilder }
-      ) => {
+      (pre, { groupId, groupGanttComponent: Component }) => {
         return {
           ...pre,
-          [groupId]: ({ data }) => (
-            <Component data={data} groupHeaderBuilder={groupHeaderBuilder} />
-          ),
+          [groupId]: Component,
         };
       },
       {
@@ -299,7 +294,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         getBarEnd,
         cellWidth,
         minBarRange,
-        groupOptions,
+        groupOptions
       );
       setNodes(nodes);
       setColumns([...columns, ...groupColumns]);

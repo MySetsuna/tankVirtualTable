@@ -22,27 +22,30 @@ import { Gantt, GroupOption } from "./Gantt";
 import Flow from "./ReactFlowDemo";
 
 const mdata = makeData(50);
+type TData = (typeof mdata)[0];
 
-const groupOptionMap: { [key: string]: GroupOption<(typeof mdata)[0]> } = {
+const groupOptionMap: { [key: string]: GroupOption<TData> } = {
   month: {
     groupId: "month",
     groupKey(data) {
       return dayjs(data.createdAt).format("YYYY-MM");
     },
-    groupHeaderBuilder({ id, subRows, leafRows }) {
-      return { id, rows: leafRows };
+    groupHeaderBuilder(row: Row<TData>) {
+      return row;
     },
-    groupGanttComponent: (data, groupHeaderBuilder) => <>77777</>,
+    groupGanttComponent: () => <>77777</>,
+    isFixedX: true,
   },
   date: {
     groupId: "date",
     groupKey(data) {
       return dayjs(data.createdAt).format("YYYY-MM-DD");
     },
-    groupHeaderBuilder: ({ id, subRows, leafRows }) => {
-      return { id, rows: leafRows };
+    groupHeaderBuilder(row: Row<TData>) {
+      return row;
     },
-    groupGanttComponent: (data, groupHeaderBuilder) => <>88888</>,
+    groupGanttComponent: () => <>88888</>,
+    isFixedX: true,
   },
 };
 
