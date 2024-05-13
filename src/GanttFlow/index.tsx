@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { ReactNode, useCallback, useEffect, useState } from "react";
 import ReactFlow, {
+  MarkerType,
+  Node,
   NodeChange,
+  NodeTypes,
   addEdge,
   applyNodeChanges,
   useEdgesState,
@@ -8,9 +11,19 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { GanttBarBox } from "../GanttBarBox";
+import { AnyObject } from "../VirtualGantt";
+import { GanttBarData, GanttNode, GroupGanttBarData } from "../Gantt";
 
-function Flow({ children, initialNodes, celWidth, nodeTypes }) {
-  const [nodes, setNodes] = useState(initialNodes);
+type GanttFlowProps = {
+  children: ReactNode;
+  nodes?: GanttNode<AnyObject>[];
+  cellWidth: number;
+  nodeTypes: NodeTypes;
+  setNodes: React.Dispatch<React.SetStateAction<GanttNode<AnyObject>[]>>;
+};
+
+function GanttFlow(props: GanttFlowProps) {
+  const { children, nodes, cellWidth, nodeTypes, setNodes } = props;
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const onConnect = useCallback(
@@ -41,7 +54,6 @@ function Flow({ children, initialNodes, celWidth, nodeTypes }) {
             };
           }
         }
-
         return change;
       });
 
@@ -49,15 +61,48 @@ function Flow({ children, initialNodes, celWidth, nodeTypes }) {
     });
   }, []);
 
-  useEffect(() => {
-    setNodes(initialNodes);
-  }, [initialNodes]);
+  const onNodesDragStop = useCallback(
+    (
+      event,
+      changeNode: GanttNode<AnyObject>,
+      nodes: GanttNode<AnyObject>[]
+    ) => {
+      console.log(nodes, "nodes");
+
+      setNodes((nodes) => {
+        return nodes.map((node) => {
+          if (node.id === changeNode.id) {
+            return {
+              ...changeNode,
+              position: {
+                x: changeNode.position.x - (changeNode.position.x % cellWidth),
+                y: node.position.y,
+              },
+            };
+          }
+          return node;
+        });
+      });
+    },
+    []
+  );
 
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      defaultEdgeOptions={{
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+        },
+        style: {
+          // stroke: "black",
+        },
+        // type:"step"
+        // type:'simplebezier'
+      }}
       onNodesChange={onNodesChange}
+      onNodeDragStop={onNodesDragStop}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
       panOnDrag={false}
@@ -68,11 +113,14 @@ function Flow({ children, initialNodes, celWidth, nodeTypes }) {
       preventScrolling={false}
       zoomActivationKeyCode={null}
       nodeTypes={nodeTypes}
+      autoPanOnNodeDrag={false}
+      autoPanOnConnect={false}
       panActivationKeyCode={null}
+      style={{ backgroundColor: "red" }}
     >
       {children}
     </ReactFlow>
   );
 }
 
-export default Flow;
+export default GanttFlow;

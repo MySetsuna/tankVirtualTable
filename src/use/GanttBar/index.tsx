@@ -1,7 +1,28 @@
-import React from "react";
+import React, { FC } from "react";
+import { NodeProps } from "reactflow";
+import { GanttBarData } from "../../Gantt";
+import { Person } from "../../makeData";
+import dayjs from "dayjs";
 
-export const GanttBar = ({ data }) => {
-    console.log(data,'data');
-    
-  return <>99999</>;
+export const GanttBar: FC<NodeProps<GanttBarData<Person>>> = ({
+  data,
+  id,
+}) => {
+  const { height, index, row, fixedX, fixedY } = data;
+
+  return (
+    <div
+      style={{
+        backgroundColor: `rgba(${row.id + 20}, ${30 + index * 4}, ${
+          index + row.id + 100
+        }, 1)`,
+        height,
+        overflow: "hidden",
+      }}
+      className="gantt-bar"
+      id={id}
+    >
+      {dayjs(row.original.createdAt).format("YYYYMMDD")}
+    </div>
+  );
 };

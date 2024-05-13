@@ -6,14 +6,39 @@ import {
   ResizeDragEvent,
   ResizeParams,
 } from "reactflow";
+import { GanttBarBoxProps } from "../Gantt";
 
-export const GanttBarBox = ({ data, children }) => {
-  const { height, minWidth, index } = data;
-  const row = data.original;
-  const onResizeEnd = (event: ResizeDragEvent, params: ResizeParams) => {
-    console.log(params);
+export const GanttBarBox = (props: GanttBarBoxProps) => {
+  const { children, ...rest } = props;
+  const { data, setNodes } = rest;
+  const { height, minWidth, index } = rest.data;
+  const row = rest.data.row;
+  const onResizeEnd = (_event: ResizeDragEvent, params: ResizeParams) => {
+    setNodes((nodes) => {
+      return nodes.map((node) => {
+        if (node.data.row.id === row.id) {
+          const { cellWidth } = data;
+          const { width, x } = params;
+          // 如果拖拽右边 x 不变
+
+          const diff = Math.ceil(width / cellWidth);
+          const newX = x - (x % cellWidth);
+          return {
+            ...node,
+            style: {
+              ...node.style,
+              width: diff * cellWidth,
+            },
+            position: {
+              x: newX,
+              y: node.position.y,
+            },
+          };
+        }
+        return node;
+      });
+    });
   };
-  console.log(row, "row", children, "children");
   const GanttBar = children;
 
   return (
@@ -25,13 +50,12 @@ export const GanttBarBox = ({ data, children }) => {
         lineStyle={{
           backgroundColor: "#00000000",
           width: 6,
-
         }}
         onResizeEnd={onResizeEnd}
       />
       <Handle type="target" position={Position.Left} />
       {GanttBar ? (
-        <GanttBar data={data} />
+        <GanttBar {...rest} />
       ) : (
         <div
           style={{

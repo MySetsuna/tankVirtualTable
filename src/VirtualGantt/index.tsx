@@ -3,20 +3,15 @@ import {
   ColumnDefTemplate,
   HeaderContext,
   Row,
-  SortingState,
   flexRender,
   getCoreRowModel,
   getGroupedRowModel,
-  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { VirtualItem, useVirtualizer } from "@tanstack/react-virtual";
-import Xarrow, { useXarrow } from "react-xarrows";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import React, {
   CSSProperties,
-  Component,
-  ReactNode,
-  RefObject,
+  FC,
   forwardRef,
   useCallback,
   useEffect,
@@ -29,23 +24,24 @@ import React, {
 import dayjs, { Dayjs } from "dayjs";
 import weekday from "dayjs/plugin/weekday";
 import {
-  GanttStyleByStartParams,
   WEEKDAY_MAP,
   buildGanttHeader,
   getDayDiff,
-  getGanttStyleByStart,
   getNodes,
   getRangeAtByCurrentAt,
 } from "./utils";
-import { debounce, get, throttle } from "lodash";
 import weekOfYear from "dayjs/plugin/weekOfYear";
 import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
-import { GroupOption } from "../Gantt";
-import { GanttBarLines } from "../GantBarLines";
-import Flow from "../ReactFlowDemo";
-import { Node, NodeTypes } from "reactflow";
+import {
+  GanttBarData,
+  GanttNode,
+  GroupGanttBarData,
+  GroupOption,
+} from "../Gantt";
+import GanttFlow from "../GanttFlow";
+import { Node, NodeProps, NodeTypes, useReactFlow } from "reactflow";
 import { GanttBarBox } from "../GanttBarBox";
 
 dayjs.extend(advancedFormat);
@@ -104,13 +100,7 @@ type VirtualGanttProps<T = AnyObject> = {
   barClassName?: string | ((row: T, index: number) => string);
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
-  GanttBar?: ({
-    data,
-    children,
-  }: {
-    data: any;
-    children: any;
-  }) => React.JSX.Element;
+  GanttBar?: FC<NodeProps<GanttBarData<T>>>;
 } & (
   | {
       startAt: Dayjs;
@@ -158,8 +148,11 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   type TData = (typeof originData)[0];
 
   const [columns, setColumns] = useState<ColumnDef<any>[]>([]);
-  const [nodes, setNodes] = useState<Node<AnyObject>[]>();
+  const [nodes, setNodes] = useState<GanttNode<TData>[]>([]);
   const [startDate, setStartDate] = useState<Dayjs | undefined>(
+    startAt?.clone()
+  );
+  const [originStart, setOriginStart] = useState<Dayjs | undefined>(
     startAt?.clone()
   );
   const [bufferMonths, setBufferMonths] = useState<BufferMonths>(
@@ -170,9 +163,9 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const scrollToTimer = useRef<NodeJS.Timeout | null>(null);
   const scrollCallback = useRef<(() => void) | null>(() => {});
   const [data, setData] = useState<TData | any>(originData);
+  const [viewportX, setViewportX] = useState<number>(0);
 
   const parentRef = React.useRef<HTMLDivElement>(null);
-  const scrollBoxRef = React.useRef<HTMLDivElement>(null);
 
   const { groupColumns, grouping } = useMemo(() => {
     return {
@@ -189,12 +182,14 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
       (pre, { groupId, groupGanttComponent: Component }) => {
         return {
           ...pre,
-          [groupId]: Component,
+          [groupId]: (props) => <Component {...props} setNodes={setNodes} />,
         };
       },
       {
-        gantbar: ({ data }) => (
-          <GanttBarBox data={data}>{GanttBar}</GanttBarBox>
+        gantbar: (props) => (
+          <GanttBarBox {...props} setNodes={setNodes}>
+            {GanttBar}
+          </GanttBarBox>
         ),
       } as NodeTypes
     );
@@ -203,6 +198,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   useEffect(() => {
     if (startAt && endAt) {
       setStartDate(startAt);
+      setOriginStart(startAt);
       setEndDate(endAt);
     }
   }, [startAt, endAt]);
@@ -210,6 +206,16 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   useEffect(() => {
     setCurrentDate(currentAt?.isValid() ? currentAt : dayjs());
   }, [currentAt]);
+
+  const { setViewport, zoomIn, zoomOut } = useReactFlow();
+
+  useEffect(() => {
+    setViewport({
+      x: viewportX,
+      y: 0,
+      zoom: 1,
+    });
+  }, [viewportX]);
 
   useEffect(() => {
     if (currentDate && bufferMonths) {
@@ -219,6 +225,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
       );
 
       setStartDate(startAt);
+      setOriginStart(startAt);
       setEndDate(endAt);
       if (parentRef.current && isInfiniteX) {
         const startOffset = currentDate.diff(startAt, "day");
@@ -273,6 +280,30 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     overscan,
   });
 
+  useEffect(() => {
+    if (originStart) {
+      const nodes = getNodes(
+        rows,
+        rowVirtualizer.getVirtualItems(),
+        getDayDiff,
+        originStart,
+        getBarStart,
+        getBarEnd,
+        cellWidth,
+        minBarRange,
+        groupOptions
+      );
+      setNodes(nodes);
+    }
+  }, [
+    originStart,
+    rows,
+    getDayDiff,
+    getBarStart,
+    minBarRange,
+    rowVirtualizer.getVirtualItems(),
+  ]);
+
   // 是否使用同步effect？使用useEffect会使内容闪烁
   useLayoutEffect(() => {
     if (startDate && endDate) {
@@ -284,19 +315,6 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         cellWidth,
         isWeekStartMonday
       );
-
-      const nodes = getNodes(
-        rows,
-        rowVirtualizer.getVirtualItems(),
-        getDayDiff,
-        startDate,
-        getBarStart,
-        getBarEnd,
-        cellWidth,
-        minBarRange,
-        groupOptions
-      );
-      setNodes(nodes);
       setColumns([...columns, ...groupColumns]);
       scrollCallback.current?.();
     }
@@ -308,11 +326,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     isWeekStartMonday,
     mode,
     groupColumns,
-    rows,
-    getDayDiff,
-    getBarStart,
-    minBarRange,
-    rowVirtualizer.getVirtualItems(),
+    bufferDay,
   ]);
 
   const handleScroll = useCallback(() => {
@@ -323,25 +337,25 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         parentRef.current?.scrollWidth;
 
       if (toLeft) {
-        setNodes([]);
         scrollCallback.current = () => {
           parentRef.current?.scrollTo({
             left: cellWidth * bufferDay,
           });
           scrollCallback.current = null;
         };
+        setViewportX((pre) => pre + bufferDay * cellWidth);
         setEndDate((date) => date?.add(-bufferDay, "day"));
         setStartDate((date) => date?.add(-bufferDay, "day"));
         return;
       }
       if (toRight) {
-        setNodes([]);
         scrollCallback.current = () => {
           parentRef.current?.scrollTo({
             left: parentRef.current.scrollLeft - cellWidth * bufferDay,
           });
           scrollCallback.current = null;
         };
+        setViewportX((pre) => pre - bufferDay * cellWidth);
         setStartDate((date) => date?.add(bufferDay, "day"));
         setEndDate((date) => date?.add(bufferDay, "day"));
         return;
@@ -497,7 +511,12 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             // pointerEvents: "none",
           }}
         >
-          <Flow initialNodes={nodes} celWidth={cellWidth} nodeTypes={nodeTypes}>
+          <GanttFlow
+            nodes={nodes}
+            setNodes={setNodes}
+            cellWidth={cellWidth}
+            nodeTypes={nodeTypes}
+          >
             <div
               className="gantt-background"
               style={{
@@ -562,7 +581,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                 );
               })}
             </div>
-          </Flow>
+          </GanttFlow>
         </div>
       </div>
     </div>

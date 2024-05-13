@@ -19,9 +19,8 @@ import { VirtualTable } from "./VirtualTable";
 import { GanttMode, VirtualGantt } from "./VirtualGantt";
 import dayjs, { Dayjs } from "dayjs";
 import { Gantt, GroupOption } from "./Gantt";
-import Flow from "./ReactFlowDemo";
 
-const mdata = makeData(50);
+const mdata = makeData(50_000);
 type TData = (typeof mdata)[0];
 
 const groupOptionMap: { [key: string]: GroupOption<TData> } = {

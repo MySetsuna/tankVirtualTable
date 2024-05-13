@@ -14,7 +14,12 @@ import weekYear from "dayjs/plugin/weekYear";
 import "dayjs/locale/zh-cn";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import { getRowId } from "../Gantt/use-lib";
-import { GroupOption } from "../Gantt";
+import {
+  GanttBarData,
+  GanttNode,
+  GroupGanttBarData,
+  GroupOption,
+} from "../Gantt";
 dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
@@ -174,9 +179,6 @@ export const buildGanttHeader = <T>(
         id: yearHeader,
       });
     }
-
-    console.log(columns, "columns");
-
     return columns;
   }
   return [];
@@ -257,8 +259,10 @@ export const getNodes = (
   minBarRange: number,
   groupOptions?: GroupOption<AnyObject>[],
   margin = 4
-): Node<AnyObject>[] => {
-  const nodes: Node<AnyObject>[] = virtualItems.map((virtualRow, index) => {
+): GanttNode<AnyObject>[] => {
+  const nodes: Node<
+    GanttBarData<AnyObject> | GroupGanttBarData<AnyObject, any>
+  >[] = virtualItems.map((virtualRow, index) => {
     /**
      * 
 groupingColumnId
@@ -293,6 +297,7 @@ groupingValue
         width,
         minWidth: minBarRange * cellWidth,
         index: virtualRow.index,
+        cellWidth,
       },
       position: {
         x: diff * cellWidth,
