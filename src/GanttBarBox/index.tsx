@@ -23,8 +23,9 @@ export const GanttBarBox = ({ data, children }) => {
         minHeight={height}
         maxHeight={height}
         lineStyle={{
-          backgroundColor: "red",
-          width: 9,
+          backgroundColor: "#00000000",
+          width: 6,
+
         }}
         onResizeEnd={onResizeEnd}
       />
