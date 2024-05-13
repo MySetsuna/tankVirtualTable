@@ -13,6 +13,7 @@ import "reactflow/dist/style.css";
 import { GanttBarBox } from "../GanttBarBox";
 import { AnyObject } from "../VirtualGantt";
 import { GanttBarData, GanttNode, GroupGanttBarData } from "../Gantt";
+import { isNumber } from "lodash";
 
 type GanttFlowProps = {
   children: ReactNode;
@@ -67,8 +68,7 @@ function GanttFlow(props: GanttFlowProps) {
       changeNode: GanttNode<AnyObject>,
       nodes: GanttNode<AnyObject>[]
     ) => {
-      console.log(nodes, "nodes");
-
+      if (isNumber(changeNode.data.fixedX)) return;
       setNodes((nodes) => {
         return nodes.map((node) => {
           if (node.id === changeNode.id) {
