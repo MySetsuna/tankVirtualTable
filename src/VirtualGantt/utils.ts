@@ -14,6 +14,7 @@ import weekYear from "dayjs/plugin/weekYear";
 import "dayjs/locale/zh-cn";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import { getRowId } from "../Gantt/use-lib";
+import { GroupOption } from "../Gantt";
 dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
@@ -247,10 +248,24 @@ export const getNodes = (
   getBarEnd: (row: AnyObject) => Dayjs | undefined,
   cellWidth: number,
   minBarRange: number,
+  groupOptions: GroupOption<AnyObject>[],
   margin = 4
 ): Node<AnyObject>[] => {
   const nodes: Node<AnyObject>[] = virtualItems.map((virtualRow, index) => {
+    console.log(rows, "rows");
+    /**
+     * 
+groupingColumnId
+: 
+"month"
+groupingValue
+: 
+"2024-06"
+     */
     const row = rows[virtualRow.index] as Row<AnyObject>;
+    const option = groupOptions.find(
+      ({ groupId }) => groupId === row.groupingColumnId
+    );
     const id = getRowId(row.original);
     const barStart = getBarStart(row.original);
     const barEnd = getBarEnd(row.original);
@@ -264,8 +279,9 @@ export const getNodes = (
       // height,
       // width,
       data: {
-        original: row,
+        original:option?option.groupHeaderBuilder?.(row): row,
         fixedY: y,
+        fixedX: row.groupingColumnId || undefined,
         height,
         width,
         minWidth: minBarRange * cellWidth,
@@ -279,7 +295,7 @@ export const getNodes = (
         height,
         width,
       },
-      type: "gantbar",
+      type: row.groupingColumnId ?? "gantbar",
     };
   });
   return nodes;

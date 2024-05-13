@@ -7,13 +7,9 @@ import ReactFlow, {
   useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { GanttBarBox } from "../GanttBar";
+import { GanttBarBox } from "../GanttBarBox";
 
-const nodeTypes = {
-  gantbar: GanttBarBox,
-};
-
-function Flow({ children, initialNodes, celWidth }) {
+function Flow({ children, initialNodes, celWidth, nodeTypes }) {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -32,14 +28,16 @@ function Flow({ children, initialNodes, celWidth }) {
         ) {
           const fixedY = nds.find((node) => change.id === node.id)?.data.fixedY;
 
-          if (fixedY) {
+          const fixedX = nds.find((node) => change.id === node.id)?.data.fixedX;
+
+          if (fixedY || fixedX) {
             change.position = {
-              x: change.position.x,
-              y: fixedY,
+              x: fixedX ?? change.position.x,
+              y: fixedY ?? change.position.y,
             };
             change.positionAbsolute = {
-              x: change.positionAbsolute.x,
-              y: fixedY,
+              x: fixedX ?? change.positionAbsolute.x,
+              y: fixedY ?? change.positionAbsolute.x,
             };
           }
         }

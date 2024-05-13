@@ -4,11 +4,13 @@ import {
   SortingState,
   flexRender,
   getCoreRowModel,
+  getGroupedRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useMemo } from "react";
+import { GroupOption } from "../Gantt";
 
 type AnyObject = {
   [key: string]: any;
@@ -28,10 +30,20 @@ type VirtualTableProps<T = AnyObject> = {
   }) => ReactNode;
   width: number;
   rowHeight: number;
+  isGroupView?: boolean;
+  groupOptions?: Array<GroupOption<T>>;
 };
 
 export const VirtualTable = (props: VirtualTableProps) => {
-  const { columns, data, cellRender, width, rowHeight } = props;
+  const {
+    columns,
+    data,
+    cellRender,
+    width,
+    rowHeight,
+    isGroupView,
+    groupOptions,
+  } = props;
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
@@ -40,17 +52,42 @@ export const VirtualTable = (props: VirtualTableProps) => {
     NaN,
   ]);
 
+  const { groupColumns, grouping } = useMemo(() => {
+    return {
+      groupColumns:
+        groupOptions?.map(({ groupId, groupKey }) => {
+          return { id: groupId, accessorFn: groupKey, size: 0 };
+        }) ?? [],
+      grouping: groupOptions?.map(({ groupId }) => groupId) ?? [],
+    };
+  }, [groupOptions]);
+
   const table = useReactTable({
     data,
     columns,
     state: {
+      // grouping: ["age"],
       sorting,
     },
+
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getGroupedRowModel: getGroupedRowModel(),
     // debugTable: true,
   });
+
+  useEffect(() => {
+    if (isGroupView) {
+      table.setGrouping(
+        grouping.filter((groupId) => {
+          return !!table.getColumn(groupId);
+        })
+      );
+    } else {
+      table.setGrouping([]);
+    }
+  }, [table, isGroupView, grouping]);
 
   const { rows } = table.getRowModel();
 
@@ -75,7 +112,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
     <div
       ref={parentRef}
       className={["gantt-container", "container"].join(" ")}
-      style={{ width }}
+      style={{ width, overflowY: "hidden" }}
     >
       <div style={{ height: `${rowVirtualizer.getTotalSize() + 60}px` }}>
         <div style={{ display: "flex", position: "sticky", top: 0, zIndex: 1 }}>

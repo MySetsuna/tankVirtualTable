@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import ScrollMirror from "scrollmirror";
 import { VirtualTable } from "../VirtualTable";
 import { makeData } from "../makeData";
@@ -9,7 +9,6 @@ import dayjs, { Dayjs } from "dayjs";
 import { get, groupBy } from "lodash";
 import Xarrow, { useXarrow, Xwrapper } from "react-xarrows";
 import Draggable from "react-draggable";
-import { MyGnttBar } from "../MyGanttBar";
 import {
   getBarEnd,
   getBarStart,
@@ -17,6 +16,8 @@ import {
   getPostLinkIds,
   getRowId,
 } from "./use-lib";
+import { Row } from "@tanstack/react-table";
+import { GanttBar } from "../use/GanttBar";
 
 type AnyObject = {
   [key: string]: any;
@@ -25,8 +26,22 @@ type AnyObject = {
 type BaseGroupHeaderData = { key: string; value?: AnyObject };
 
 export type GroupOption<T, G extends BaseGroupHeaderData = any> = {
-  groupHeaderBuilder?: (groupData: T[]) => G;
+  groupHeaderBuilder?: (data: {
+    id: string;
+    subRows: Row<T>[];
+    leafRows: Row<T>[];
+  }) => G;
   groupKey: ((data: T) => string) | keyof T;
+  groupId: string;
+  fixedX?: boolean;
+  groupGanttComponent: (
+    data: any,
+    groupHeaderBuilder?: (data: {
+      id: string;
+      subRows: Row<T>[];
+      leafRows: Row<T>[];
+    }) => G
+  ) => ReactNode;
 };
 
 export const EMPTY_TAG = "空";
@@ -34,49 +49,19 @@ export const SPLIT_TAG = "%-@-%";
 
 type GanttProps<T = AnyObject> = {
   data: T[];
+  isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
+  ganttMode: GanttMode;
+  selectDate: Dayjs;
 };
 
 export const Gantt = (props: GanttProps) => {
   // const [data, setData] = React.useState(mdata);
-  const { data, groupOptions } = props;
+  const { data, groupOptions, isGroupView, ganttMode, selectDate } = props;
   type TData = (typeof data)[0];
   type GData = ReturnType<
     NonNullable<NonNullable<typeof groupOptions>[0]["groupHeaderBuilder"]>
   >;
-
-  const [groupData, setGroupData] = useState<
-    Array<TData | GData> | undefined
-  >();
-
-  useEffect(() => {
-    if (groupOptions) {
-      const allGroupMap = new Map<string, TData[]>();
-      const keys: Array<{ key: string }> = [];
-      data.forEach((item) => {
-        const groupKeys = groupOptions.map(({ groupKey }) => {
-          let key: string = EMPTY_TAG;
-          if (typeof groupKey === "string" || typeof groupKey === "number") {
-            key = get(item, groupKey, EMPTY_TAG);
-          } else {
-            key = groupKey(item);
-          }
-
-          return key;
-        });
-        const uninKey = groupKeys.join("%-@-%");
-        const group = allGroupMap.get(uninKey) ?? [];
-        group.push(item);
-        // groupKeys.forEach((groupKey) => {
-        //   const group = allGroupMap.get(groupKey) ?? [];
-        //   group.push(item);
-        // });
-      });
-      Array.from(allGroupMap.entries()).sort(([aKey], [bKey]) => {
-        return aKey.localeCompare(bKey);
-      });
-    }
-  }, [groupOptions, data]);
 
   React.useEffect(() => {
     new ScrollMirror(document.querySelectorAll(".gantt-container"), {
@@ -85,41 +70,14 @@ export const Gantt = (props: GanttProps) => {
     });
   }, []);
 
-  const [ganttMode, setGanttMode] = useState<GanttMode>(GanttMode.Week);
-
-  const [selectDate, setSelectDate] = useState<Dayjs>(dayjs());
-
   return (
     <div>
-      <select
-        value={ganttMode}
-        onChange={(event) => {
-          setGanttMode(Number(event.target.value));
-        }}
-      >
-        <option value={GanttMode.Month}>月</option>
-        <option value={GanttMode.Week}>周</option>
-      </select>
-      <input
-        type="date"
-        value={selectDate.format("YYYY-MM-DD")}
-        onChange={(event) => {
-          console.log(event, "event");
-
-          setSelectDate(dayjs(event.target.value));
-        }}
-      />
-      <button
-        onClick={() => {
-          setSelectDate(dayjs());
-        }}
-      >
-        Go to Today
-      </button>
       <div style={{ display: "flex" }}>
         <VirtualTable
           rowHeight={40}
           width={600}
+          isGroupView={isGroupView}
+          groupOptions={groupOptions}
           columns={[
             {
               accessorKey: "id",
@@ -141,8 +99,11 @@ export const Gantt = (props: GanttProps) => {
             },
             {
               accessorKey: "age",
-              header: () => "Age",
               size: 150,
+              header: () => "Age",
+              aggregatedCell: ({ getValue }) =>
+                Math.round(getValue<number>() * 100) / 100,
+              aggregationFn: "median",
             },
             {
               accessorKey: "visits",
@@ -193,28 +154,26 @@ export const Gantt = (props: GanttProps) => {
           }}
           data={data}
         />
-        <Xwrapper>
-          <VirtualGantt
-            rowHeight={40}
-            getFrontLinkIds={getFrontLinkIds}
-            getPostLinkIds={getPostLinkIds}
-            getRowId={getRowId}
-            getBarEnd={getBarEnd}
-            getBarStart={getBarStart}
-            mode={ganttMode}
-            currentAt={selectDate}
-            bufferMonths={[1, 2]}
-            bufferDay={40}
-            // endAt={dayjs("2025-06-28")}
-            data={data}
-            width={1200}
-            style={{
-              position: "relative",
-              left: -17,
-            }}
-           
-          />
-        </Xwrapper>
+        <VirtualGantt
+          GanttBar={GanttBar}
+          rowHeight={40}
+          getFrontLinkIds={getFrontLinkIds}
+          getPostLinkIds={getPostLinkIds}
+          getRowId={getRowId}
+          getBarEnd={getBarEnd}
+          getBarStart={getBarStart}
+          mode={ganttMode}
+          currentAt={selectDate}
+          bufferMonths={[2]}
+          bufferDay={40}
+          data={data}
+          width={1200}
+          groupOptions={groupOptions}
+          isGroupView={isGroupView}
+          style={{
+            position: "relative",
+          }}
+        />
       </div>
     </div>
   );

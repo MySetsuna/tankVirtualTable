@@ -6,6 +6,7 @@ import {
   SortingState,
   flexRender,
   getCoreRowModel,
+  getGroupedRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
@@ -13,6 +14,7 @@ import { VirtualItem, useVirtualizer } from "@tanstack/react-virtual";
 import Xarrow, { useXarrow } from "react-xarrows";
 import React, {
   CSSProperties,
+  Component,
   ReactNode,
   RefObject,
   forwardRef,
@@ -41,10 +43,10 @@ import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
 import { GroupOption } from "../Gantt";
-import { GanttBarInstance, GanttBarProps } from "../MyGanttBar";
 import { GanttBarLines } from "../GantBarLines";
 import Flow from "../ReactFlowDemo";
-import { Node } from "reactflow";
+import { Node, NodeTypes } from "reactflow";
+import { GanttBarBox } from "../GanttBarBox";
 
 dayjs.extend(advancedFormat);
 
@@ -64,8 +66,6 @@ export enum GanttMode {
   Month,
   Week,
 }
-
-export type BarRefMap = Map<string, GanttBarInstance | null>;
 
 export type HeadRender<T> = {
   showYearRow?: boolean;
@@ -93,7 +93,7 @@ type VirtualGanttProps<T = AnyObject> = {
   isHoliday?: (date: Dayjs) => boolean;
   isInfiniteX?: boolean;
   isWeekStartMonday?: boolean;
-  groupOptions?: Array<GroupOption<T>>;
+
   getBarStart: (row: T) => Dayjs | undefined;
   getBarEnd: (row: T) => Dayjs | undefined;
   getFrontLinkIds: (row: T) => string[];
@@ -102,6 +102,15 @@ type VirtualGanttProps<T = AnyObject> = {
   minBarRange?: number;
   barStyle?: CSSProperties | ((row: T, index: number) => CSSProperties);
   barClassName?: string | ((row: T, index: number) => string);
+  isGroupView?: boolean;
+  groupOptions?: Array<GroupOption<T>>;
+  GanttBar?: ({
+    data,
+    children,
+  }: {
+    data: any;
+    children: any;
+  }) => React.JSX.Element;
 } & (
   | {
       startAt: Dayjs;
@@ -116,7 +125,6 @@ type VirtualGanttProps<T = AnyObject> = {
       bufferMonths: BufferMonths;
     }
 );
-
 export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const {
     mode = GanttMode.Month,
@@ -139,15 +147,18 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     isInfiniteX,
     isWeekStartMonday,
     groupOptions,
+    isGroupView,
     getBarStart,
     getBarEnd,
     getFrontLinkIds,
     getPostLinkIds,
     getRowId,
+    GanttBar,
   } = props;
   type TData = (typeof originData)[0];
 
   const [columns, setColumns] = useState<ColumnDef<any>[]>([]);
+  const [nodes, setNodes] = useState<Node<AnyObject>[]>();
   const [startDate, setStartDate] = useState<Dayjs | undefined>(
     startAt?.clone()
   );
@@ -162,25 +173,37 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
 
   const parentRef = React.useRef<HTMLDivElement>(null);
   const scrollBoxRef = React.useRef<HTMLDivElement>(null);
-  const barRefMap = useRef<BarRefMap>(new Map());
 
-  useEffect(() => {}, [groupOptions, data]);
+  const { groupColumns, grouping } = useMemo(() => {
+    return {
+      groupColumns:
+        groupOptions?.map(({ groupId, groupKey }) => {
+          return { id: groupId, accessorFn: groupKey, size: 0 };
+        }) ?? [],
+      grouping: groupOptions?.map(({ groupId }) => groupId) ?? [],
+    };
+  }, [groupOptions]);
 
-  // 是否使用同步effect？使用useEffect会使内容闪烁
-  useLayoutEffect(() => {
-    if (startDate && endDate) {
-      const columns = buildGanttHeader<TData>(
-        mode,
-        startDate,
-        endDate,
-        headRender,
-        cellWidth,
-        isWeekStartMonday
-      );
-      setColumns(columns);
-      scrollCallback.current?.();
-    }
-  }, [startDate, endDate, headRender, cellWidth, isWeekStartMonday, mode]);
+  const nodeTypes = useMemo(() => {
+    return (groupOptions ?? []).reduce(
+      (
+        pre,
+        { groupId, groupGanttComponent: Component, groupHeaderBuilder }
+      ) => {
+        return {
+          ...pre,
+          [groupId]: ({ data }) => (
+            <Component data={data} groupHeaderBuilder={groupHeaderBuilder} />
+          ),
+        };
+      },
+      {
+        gantbar: ({ data }) => (
+          <GanttBarBox data={data}>{GanttBar}</GanttBarBox>
+        ),
+      } as NodeTypes
+    );
+  }, [groupOptions, GanttBar]);
 
   useEffect(() => {
     if (startAt && endAt) {
@@ -228,9 +251,23 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const table = useReactTable({
     data,
     columns,
+    enableGrouping: false,
     getCoreRowModel: getCoreRowModel(),
+    getGroupedRowModel: getGroupedRowModel(),
     // debugTable: true,
   });
+
+  useEffect(() => {
+    if (isGroupView) {
+      table.setGrouping(
+        grouping.filter((groupId) => {
+          return !!table.getColumn(groupId);
+        })
+      );
+    } else {
+      table.setGrouping([]);
+    }
+  }, [table, isGroupView, grouping]);
 
   const { rows } = table.getRowModel();
 
@@ -241,8 +278,19 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     overscan,
   });
 
-  const nodes = startDate
-    ? getNodes(
+  // 是否使用同步effect？使用useEffect会使内容闪烁
+  useLayoutEffect(() => {
+    if (startDate && endDate) {
+      const columns = buildGanttHeader<TData>(
+        mode,
+        startDate,
+        endDate,
+        headRender,
+        cellWidth,
+        isWeekStartMonday
+      );
+
+      const nodes = getNodes(
         rows,
         rowVirtualizer.getVirtualItems(),
         getDayDiff,
@@ -250,10 +298,27 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         getBarStart,
         getBarEnd,
         cellWidth,
-        minBarRange
-      )
-    : [];
-  console.log(nodes);
+        minBarRange,
+        groupOptions,
+      );
+      setNodes(nodes);
+      setColumns([...columns, ...groupColumns]);
+      scrollCallback.current?.();
+    }
+  }, [
+    startDate,
+    endDate,
+    headRender,
+    cellWidth,
+    isWeekStartMonday,
+    mode,
+    groupColumns,
+    rows,
+    getDayDiff,
+    getBarStart,
+    minBarRange,
+    rowVirtualizer.getVirtualItems(),
+  ]);
 
   const handleScroll = useCallback(() => {
     if (!scrollCallback.current && isInfiniteX && parentRef.current) {
@@ -263,6 +328,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         parentRef.current?.scrollWidth;
 
       if (toLeft) {
+        setNodes([]);
         scrollCallback.current = () => {
           parentRef.current?.scrollTo({
             left: cellWidth * bufferDay,
@@ -274,6 +340,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         return;
       }
       if (toRight) {
+        setNodes([]);
         scrollCallback.current = () => {
           parentRef.current?.scrollTo({
             left: parentRef.current.scrollLeft - cellWidth * bufferDay,
@@ -362,60 +429,62 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
                 // style={{ display: "flex", overflow: "hidden" }}
                 style={{ display: "flex" }}
               >
-                {headerGroup.headers.map((header, index) => {
-                  const isLeafHeader = header.depth === 3;
-                  return (
-                    <div
-                      key={header.id}
-                      // colSpan={header.colSpan}
-                      style={{
-                        background: "black",
-                        color: "white",
-                        fontWeight: "bolder",
-                        width: header.getSize(),
-                        height,
-                        flexShrink: 0,
-                        borderRight: "1px white solid",
-                        borderBottom: !isLeafHeader
-                          ? "1px white solid"
-                          : "unset",
-                        zIndex: index,
-                      }}
-                    >
-                      {header.isPlaceholder ? null : (
-                        <div
-                          style={
-                            !isLeafHeader
-                              ? {
-                                  position: "sticky",
-                                  left: 0,
-                                  width: 0,
-                                  whiteSpace: "nowrap",
-                                  height,
-
-                                  overflow: "visible",
-                                }
-                              : { height }
-                          }
-                        >
+                {headerGroup.headers
+                  .filter((header) => !!header.getSize())
+                  .map((header, index) => {
+                    const isLeafHeader = header.depth === 3;
+                    return (
+                      <div
+                        key={header.id}
+                        // colSpan={header.colSpan}
+                        style={{
+                          background: "black",
+                          color: "white",
+                          fontWeight: "bolder",
+                          width: header.getSize(),
+                          height,
+                          flexShrink: 0,
+                          borderRight: "1px white solid",
+                          borderBottom: !isLeafHeader
+                            ? "1px white solid"
+                            : "unset",
+                          zIndex: index,
+                        }}
+                      >
+                        {header.isPlaceholder ? null : (
                           <div
-                            style={{
-                              position: "absolute",
-                              overflow: "hidden",
-                              padding: "0 5px",
-                              width: header.getSize(),
-                            }}
+                            style={
+                              !isLeafHeader
+                                ? {
+                                    position: "sticky",
+                                    left: 0,
+                                    width: 0,
+                                    whiteSpace: "nowrap",
+                                    height,
+
+                                    overflow: "visible",
+                                  }
+                                : { height }
+                            }
                           >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
+                            <div
+                              style={{
+                                position: "absolute",
+                                overflow: "hidden",
+                                padding: "0 5px",
+                                width: header.getSize(),
+                              }}
+                            >
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             );
           })}
@@ -433,7 +502,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
             // pointerEvents: "none",
           }}
         >
-          <Flow initialNodes={nodes} celWidth={cellWidth}>
+          <Flow initialNodes={nodes} celWidth={cellWidth} nodeTypes={nodeTypes}>
             <div
               className="gantt-background"
               style={{
