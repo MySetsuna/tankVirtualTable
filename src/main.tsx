@@ -49,7 +49,7 @@ function App() {
     GroupOption<(typeof mdata)[0]>[]
   >([]);
 
-  const [ganttMode, setGanttMode] = React.useState<GanttMode>(GanttMode.Week);
+  const [ganttMode, setGanttMode] = React.useState<GanttMode>(GanttMode.WeekDay);
 
   const [selectDate, setSelectDate] = React.useState<Dayjs>(dayjs());
 
@@ -62,8 +62,8 @@ function App() {
           setGanttMode(Number(event.target.value));
         }}
       >
-        <option value={GanttMode.Month}>月</option>
-        <option value={GanttMode.Week}>周</option>
+        <option value={GanttMode.MonthDay}>月</option>
+        <option value={GanttMode.WeekDay}>周</option>
       </select>
       <input
         type="date"

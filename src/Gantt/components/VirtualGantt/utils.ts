@@ -21,6 +21,8 @@ export interface GroupingRow<TData> {
   groupingValue: any;
 }
 
+export type GanttHeaderBuilder = typeof buildGanttHeader;
+
 export const WEEKDAY_MAP = {
   0: "日",
   1: "一",
@@ -31,8 +33,8 @@ export const WEEKDAY_MAP = {
   6: "六",
 };
 
-export const buildGanttHeader = <T>(
-  mode: GanttMode,
+export const buildGanttHeader = <T, M = GanttMode>(
+  mode: M,
   startAt: Dayjs,
   endAt: Dayjs,
   headRender?: HeadRender<T>,
@@ -40,7 +42,7 @@ export const buildGanttHeader = <T>(
   isWeekStartMonday = true
 ): ColumnDef<any>[] => {
   const timezone = isWeekStartMonday ? "zh-cn" : "en";
-  if (mode === GanttMode.Month) {
+  if (mode === GanttMode.MonthDay) {
     const columns: ColumnDef<any>[] = [];
     const startAtMonth = startAt.format("YYYY-MM");
     const startAtDateNumber = startAt.get("date");
@@ -98,7 +100,7 @@ export const buildGanttHeader = <T>(
 
     return columns;
   }
-  if (GanttMode.Week === mode) {
+  if (GanttMode.WeekDay === mode) {
     const columns: ColumnDef<any>[] = [];
     const startAtWeekOfYear = startAt.locale(timezone).format("YYYY-w");
     const endAtWeekOfYear = endAt.locale(timezone).format("YYYY-w");

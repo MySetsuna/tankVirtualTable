@@ -24,6 +24,7 @@ import React, {
 import dayjs, { Dayjs } from "dayjs";
 import weekday from "dayjs/plugin/weekday";
 import {
+  GanttHeaderBuilder,
   WEEKDAY_MAP,
   buildGanttHeader,
   getDayDiff,
@@ -34,12 +35,7 @@ import weekOfYear from "dayjs/plugin/weekOfYear";
 import weekYear from "dayjs/plugin/weekYear";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import "dayjs/locale/zh-cn";
-import {
-  GanttBarData,
-  GanttNode,
-  GroupGanttBarData,
-  GroupOption,
-} from "../..";
+import { GanttBarData, GanttNode, GroupGanttBarData, GroupOption } from "../..";
 import { Node, NodeProps, NodeTypes, useReactFlow } from "reactflow";
 import { GanttBarBox } from "../GanttBarBox";
 import GanttFlow from "../GanttFlow";
@@ -59,8 +55,15 @@ export type AnyObject = {
 // todo 在内层进行分组
 
 export enum GanttMode {
-  Month,
-  Week,
+  MonthDay,
+  WeekDay,
+  YearWeek,
+  YearMonth,
+  YearQuarter,
+}
+
+export enum GanttCustomMode {
+  CustomMode = "CustomMode",
 }
 
 export type HeadRender<T> = {
@@ -77,7 +80,6 @@ export type HeadRender<T> = {
 export type BufferMonths = [number] | [number, number];
 
 type VirtualGanttProps<T = AnyObject> = {
-  mode?: GanttMode;
   data: T[];
   style?: CSSProperties;
   rowHeight?: number;
@@ -112,10 +114,20 @@ type VirtualGanttProps<T = AnyObject> = {
       currentAt: Dayjs;
       bufferMonths: BufferMonths;
     }
-);
+) &
+  (
+    | {
+        mode?: GanttMode;
+        customHeaderBuilder?: undefined;
+      }
+    | {
+        mode: GanttCustomMode;
+        customHeaderBuilder: GanttHeaderBuilder;
+      }
+  );
 export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   const {
-    mode = GanttMode.Month,
+    mode = GanttMode.MonthDay,
     overscan = 10,
     bufferDay = 10,
     rowHeight = 34,
@@ -141,6 +153,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     getPostLinkIds,
     getRowId,
     GanttBar,
+    customHeaderBuilder,
   } = props;
   type TData = (typeof originData)[0];
 
@@ -305,14 +318,26 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
   // 是否使用同步effect？使用useEffect会使内容闪烁
   useLayoutEffect(() => {
     if (startDate && endDate) {
-      const columns = buildGanttHeader<TData>(
-        mode,
-        startDate,
-        endDate,
-        headRender,
-        cellWidth,
-        isWeekStartMonday
-      );
+      let columns: ColumnDef<any>[] = [];
+      if (GanttCustomMode.CustomMode === mode && customHeaderBuilder) {
+        columns = customHeaderBuilder<TData, GanttCustomMode>(
+          mode,
+          startDate,
+          endDate,
+          headRender,
+          cellWidth,
+          isWeekStartMonday
+        );
+      } else if (Object.values(GanttMode).some((item) => item === mode)) {
+        columns = buildGanttHeader<TData>(
+          mode as GanttMode,
+          startDate,
+          endDate,
+          headRender,
+          cellWidth,
+          isWeekStartMonday
+        );
+      }
       setColumns([...columns, ...groupColumns]);
       scrollCallback.current?.();
     }
@@ -587,7 +612,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
 });
 
 VirtualGantt.defaultProps = {
-  mode: GanttMode.Month,
+  mode: GanttMode.MonthDay,
   bufferMonths: [2, 2],
   showYearRow: false,
   rowHeight: 34,
