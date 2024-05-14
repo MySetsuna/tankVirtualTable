@@ -6,7 +6,7 @@ import {
   ResizeDragEvent,
   ResizeParams,
 } from "reactflow";
-import { GanttBarBoxProps } from "../Gantt";
+import { GanttBarBoxProps } from "../..";
 
 export const GanttBarBox = (props: GanttBarBoxProps) => {
   const { children, ...rest } = props;

@@ -9,8 +9,8 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import React, { ReactNode, useEffect, useMemo } from "react";
-import { GroupOption } from "../Gantt";
+import React, { CSSProperties, ReactNode, useEffect, useMemo } from "react";
+import { GroupOption } from "../..";
 
 type AnyObject = {
   [key: string]: any;
@@ -18,6 +18,7 @@ type AnyObject = {
 
 type VirtualTableProps<T = AnyObject> = {
   columns: ColumnDef<T>[];
+  style?: CSSProperties;
   data: T[];
   cellRender: (params: {
     content: any;
@@ -28,7 +29,6 @@ type VirtualTableProps<T = AnyObject> = {
     rowIndex: number;
     rowKey: string;
   }) => ReactNode;
-  width: number;
   rowHeight: number;
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
@@ -39,10 +39,10 @@ export const VirtualTable = (props: VirtualTableProps) => {
     columns,
     data,
     cellRender,
-    width,
     rowHeight,
     isGroupView,
     groupOptions,
+    style,
   } = props;
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -112,7 +112,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
     <div
       ref={parentRef}
       className={["gantt-container", "container"].join(" ")}
-      style={{ width, overflowY: "hidden" }}
+      style={style}
     >
       <div style={{ height: `${rowVirtualizer.getTotalSize() + 60}px` }}>
         <div style={{ display: "flex", position: "sticky", top: 0, zIndex: 1 }}>

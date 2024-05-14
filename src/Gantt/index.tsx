@@ -1,24 +1,14 @@
-import React, { Component, FC, ReactNode, useEffect, useState } from "react";
+import React, { CSSProperties, FC } from "react";
 import ScrollMirror from "scrollmirror";
-import { VirtualTable } from "../VirtualTable";
-import { Person, makeData } from "../makeData";
+import { VirtualTable } from "./components/VirtualTable";
 import { TextField } from "@radix-ui/themes";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
-import { BufferMonths, GanttMode, VirtualGantt } from "../VirtualGantt";
-import dayjs, { Dayjs } from "dayjs";
-import { get, groupBy } from "lodash";
-import Xarrow, { useXarrow, Xwrapper } from "react-xarrows";
-import Draggable from "react-draggable";
-import {
-  getBarEnd,
-  getBarStart,
-  getFrontLinkIds,
-  getPostLinkIds,
-  getRowId,
-} from "./use-lib";
+import { GanttMode, VirtualGantt } from "./components/VirtualGantt";
+import { Dayjs } from "dayjs";
 import { Row } from "@tanstack/react-table";
 import { GanttBar } from "../use/GanttBar";
 import { Node, NodeProps, ReactFlowProvider } from "reactflow";
+import styles from "./index.module.scss";
 
 type AnyObject = {
   [key: string]: any;
@@ -65,20 +55,34 @@ export type GroupOption<T, D extends BaseGroupHeaderData = any> = {
   groupGanttComponent: FC<GroupGanttBarProps<T, D>>;
 };
 
-export const EMPTY_TAG = "空";
-export const SPLIT_TAG = "%-@-%";
-
 type GanttProps<T = AnyObject> = {
   data: T[];
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
   ganttMode: GanttMode;
   selectDate: Dayjs;
+  height?: CSSProperties["height"];
+  getBarStart: (row: T) => Dayjs | undefined;
+  getBarEnd: (row: T) => Dayjs | undefined;
+  getFrontLinkIds: (row: T) => string[];
+  getPostLinkIds: (row: T) => string[];
+  getRowId: (row: T) => string;
 };
 
-export const Gantt = (props: GanttProps<Person>) => {
-  // const [data, setData] = React.useState(mdata);
-  const { data, groupOptions, isGroupView, ganttMode, selectDate } = props;
+export const Gantt = (props: GanttProps<AnyObject>) => {
+  const {
+    height = 800,
+    data,
+    groupOptions,
+    isGroupView,
+    ganttMode,
+    selectDate,
+    getBarEnd,
+    getBarStart,
+    getFrontLinkIds,
+    getPostLinkIds,
+    getRowId,
+  } = props;
 
   React.useEffect(() => {
     new ScrollMirror(document.querySelectorAll(".gantt-container"), {
@@ -88,11 +92,17 @@ export const Gantt = (props: GanttProps<Person>) => {
   }, []);
 
   return (
-    <div>
+    <div className={styles.VirtualGantt}>
       <div style={{ display: "flex" }}>
         <VirtualTable
+          style={{
+            overflowX: "auto",
+            overflowY: "hidden",
+            height,
+            width: 500,
+            flexShrink: 0,
+          }}
           rowHeight={40}
-          width={600}
           isGroupView={isGroupView}
           groupOptions={groupOptions}
           columns={[
@@ -185,11 +195,14 @@ export const Gantt = (props: GanttProps<Person>) => {
             bufferMonths={[2, 2]}
             bufferDay={40}
             data={data}
-            width={1200}
             groupOptions={groupOptions}
             isGroupView={isGroupView}
             style={{
               position: "relative",
+              overflow: "auto",
+              width: 1200,
+              height,
+              flex: "auto",
             }}
           />
         </ReactFlowProvider>

@@ -1,24 +1,19 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
-import { ScrollArea, TextField, Theme } from "@radix-ui/themes";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  Row,
-  SortingState,
-  useReactTable,
-} from "@tanstack/react-table";
+import { Row } from "@tanstack/react-table";
 import { makeData, Person } from "./makeData";
 import "./index.css";
 import "@radix-ui/themes/styles.css";
-import { VirtualTable } from "./VirtualTable";
-import { GanttMode, VirtualGantt } from "./VirtualGantt";
+import { GanttMode } from "./Gantt/components/VirtualGantt";
 import dayjs, { Dayjs } from "dayjs";
 import { Gantt, GroupOption } from "./Gantt";
+import {
+  getBarEnd,
+  getBarStart,
+  getFrontLinkIds,
+  getPostLinkIds,
+  getRowId,
+} from "./use/use-lib";
 
 const mdata = makeData(50_0);
 type TData = (typeof mdata)[0];
@@ -121,6 +116,11 @@ function App() {
         selectDate={selectDate}
         ganttMode={ganttMode}
         groupOptions={groupOptions}
+        getBarEnd={getBarEnd}
+        getBarStart={getBarStart}
+        getFrontLinkIds={getFrontLinkIds}
+        getPostLinkIds={getPostLinkIds}
+        getRowId={getRowId}
       />
     </>
   );

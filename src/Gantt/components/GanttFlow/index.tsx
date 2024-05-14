@@ -1,18 +1,15 @@
-import React, { ReactNode, useCallback, useEffect, useState } from "react";
+import React, { ReactNode, useCallback } from "react";
 import ReactFlow, {
   MarkerType,
-  Node,
   NodeChange,
   NodeTypes,
   addEdge,
   applyNodeChanges,
   useEdgesState,
-  useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { GanttBarBox } from "../GanttBarBox";
 import { AnyObject } from "../VirtualGantt";
-import { GanttBarData, GanttNode, GroupGanttBarData } from "../Gantt";
+import { GanttNode } from "../..";
 import { isNumber } from "lodash";
 
 type GanttFlowProps = {

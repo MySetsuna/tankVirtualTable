@@ -1,11 +1,7 @@
 import dayjs, { Dayjs } from "dayjs";
 import { AnyObject, GanttMode, HeadRender } from ".";
-import {
-  ColumnDef,
-  ColumnDefTemplate,
-  HeaderContext,
-} from "@tanstack/react-table";
-import { CSSProperties, ReactNode } from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { CSSProperties } from "react";
 import { Node } from "reactflow";
 import { VirtualItem } from "@tanstack/react-virtual";
 import { Row } from "@tanstack/react-table";
@@ -13,13 +9,7 @@ import weekOfYear from "dayjs/plugin/weekOfYear";
 import weekYear from "dayjs/plugin/weekYear";
 import "dayjs/locale/zh-cn";
 import advancedFormat from "dayjs/plugin/advancedFormat";
-import { getRowId } from "../Gantt/use-lib";
-import {
-  GanttBarData,
-  GanttNode,
-  GroupGanttBarData,
-  GroupOption,
-} from "../Gantt";
+import { GanttBarData, GanttNode, GroupGanttBarData, GroupOption } from "../..";
 dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
@@ -257,6 +247,7 @@ export const getNodes = (
   getBarEnd: (row: AnyObject) => Dayjs | undefined,
   cellWidth: number,
   minBarRange: number,
+  getRowId: (row: AnyObject) => string,
   groupOptions?: GroupOption<AnyObject>[],
   margin = 4
 ): GanttNode<AnyObject>[] => {

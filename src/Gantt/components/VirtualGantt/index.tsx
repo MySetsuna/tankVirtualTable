@@ -39,10 +39,10 @@ import {
   GanttNode,
   GroupGanttBarData,
   GroupOption,
-} from "../Gantt";
-import GanttFlow from "../GanttFlow";
+} from "../..";
 import { Node, NodeProps, NodeTypes, useReactFlow } from "reactflow";
 import { GanttBarBox } from "../GanttBarBox";
+import GanttFlow from "../GanttFlow";
 
 dayjs.extend(advancedFormat);
 
@@ -79,7 +79,6 @@ export type BufferMonths = [number] | [number, number];
 type VirtualGanttProps<T = AnyObject> = {
   mode?: GanttMode;
   data: T[];
-  width?: number;
   style?: CSSProperties;
   rowHeight?: number;
   cellWidth?: number;
@@ -89,7 +88,6 @@ type VirtualGanttProps<T = AnyObject> = {
   isHoliday?: (date: Dayjs) => boolean;
   isInfiniteX?: boolean;
   isWeekStartMonday?: boolean;
-
   getBarStart: (row: T) => Dayjs | undefined;
   getBarEnd: (row: T) => Dayjs | undefined;
   getFrontLinkIds: (row: T) => string[];
@@ -129,7 +127,6 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     currentAt,
     startAt,
     endAt,
-    width,
     headRender,
     style,
     isHoliday,
@@ -291,6 +288,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
         getBarEnd,
         cellWidth,
         minBarRange,
+        getRowId,
         groupOptions
       );
       setNodes(nodes);
@@ -395,7 +393,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     <div
       ref={parentRef}
       className="gantt-container container"
-      style={{ width, ...style }}
+      style={style}
       onScroll={handleScroll}
     >
       <div
