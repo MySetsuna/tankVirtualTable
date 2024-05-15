@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { Row } from "@tanstack/react-table";
-import { makeData, Person } from "./makeData";
+import { makeData, Task } from "./makeData";
 import "./index.css";
 import "@radix-ui/themes/styles.css";
 import { GanttMode } from "./Gantt/components/VirtualGantt";
@@ -14,47 +14,13 @@ import {
   getPostLinkIds,
   getRowId,
 } from "./use/use-lib";
+import { getStartAndEnd } from "./Gantt/components/VirtualGantt/utils";
+import { GroupKeyer } from "./typing/gantt";
+import { getGroupOptions } from "./use/use-hepler";
 
 const mdata = makeData(50);
-type TData = (typeof mdata)[0];
-
-const groupOptionMap: { [key: string]: GroupOption<TData> } = {
-  month: {
-    groupId: "month",
-    groupKey(data) {
-      return dayjs(data.createdAt).format("YYYY-MM");
-    },
-    groupHeaderBuilder(row: Row<TData>) {
-      return row;
-    },
-    groupGanttComponent: ({ data }) => {
-      const { row, group } = data;
-      console.log(row);
-
-      return (
-        <div onClick={() => row.getToggleExpandedHandler()}>
-          <span>{row.getIsExpanded() ? "👇" : "👉"}</span>
-          <span>{row.groupingValue as string}</span>
-        </div>
-      );
-    },
-    isFixedX: true,
-  },
-  date: {
-    groupId: "date",
-    groupKey(data) {
-      return dayjs(data.createdAt).format("YYYY-MM-DD");
-    },
-    groupHeaderBuilder(row: Row<TData>) {
-      return row;
-    },
-    groupGanttComponent: () => <>88888</>,
-    isFixedX: true,
-  },
-};
-
 function App() {
-  const [isGroupView, setIsGroupView] = React.useState<boolean>(false);
+  const [isGroupView, setIsGroupView] = React.useState<boolean>(true);
   const [groupOptions, setGroupOptions] = React.useState<
     GroupOption<(typeof mdata)[0]>[]
   >([]);
@@ -64,6 +30,25 @@ function App() {
   );
 
   const [selectDate, setSelectDate] = React.useState<Dayjs>(dayjs());
+
+  const [groupKeyers, setGroupKeyers] = React.useState<GroupKeyer<Task>[]>([]);
+  const [grouping, setGrouping] = React.useState<(keyof Task)[]>([]);
+
+  React.useEffect(() => {
+    const groupOptions = getGroupOptions(groupKeyers, getBarStart, getBarEnd);
+    setGroupOptions(groupOptions);
+  }, [groupKeyers]);
+
+  React.useEffect(() => {
+    setGroupKeyers(
+      grouping.map((key) => {
+        return {
+          key,
+          groupId: `group__${key}`,
+        };
+      })
+    );
+  }, [grouping]);
 
   return (
     <>
@@ -94,35 +79,19 @@ function App() {
         Go to Today
       </button>
       <input
-        type="checkbox"
-        checked={groupOptions.some(({ groupId }) => groupId === "date")}
-        onChange={(event) => {
-          setGroupOptions((pre) => {
-            return pre
-              .filter(({ groupId }) => groupId !== "date")
-              .concat(event.target.checked ? [groupOptionMap.date] : []);
-          });
+        value={grouping}
+        onChange={(e) => {
+          const keys = e.target.value
+            .split(",")
+            .filter((item) => !!item) as (keyof Task)[];
+          setGrouping(keys);
         }}
       />
-      开始日期
-      <input
-        checked={groupOptions.some(({ groupId }) => groupId === "month")}
-        type="checkbox"
-        onChange={(event) => {
-          console.log(event.target.checked, "event.target.checked ");
-
-          setGroupOptions((pre) => {
-            return pre
-              .filter(({ groupId }) => groupId !== "month")
-              .concat(event.target.checked ? [groupOptionMap.month] : []);
-          });
-        }}
-      />
-      开始月份
       <button onClick={() => setIsGroupView((pre) => !pre)}>
         {isGroupView ? "取消分组" : "确定分组"}
       </button>
       <Gantt
+        groupGap={10}
         data={mdata}
         isGroupView={isGroupView}
         selectDate={selectDate}

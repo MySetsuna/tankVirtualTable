@@ -1,4 +1,4 @@
-import React, { CSSProperties, FC, useState } from "react";
+import React, { CSSProperties, FC, Key, useState } from "react";
 import ScrollMirror from "scrollmirror";
 import { VirtualTable } from "./components/VirtualTable";
 import { TextField } from "@radix-ui/themes";
@@ -10,11 +10,7 @@ import { GanttBar } from "../use/GanttBar";
 import { Node, NodeProps, ReactFlowProvider } from "reactflow";
 import styles from "./index.module.scss";
 
-type AnyObject = {
-  [key: string]: any;
-};
-
-type BaseGroupHeaderData = { key: string; value?: AnyObject };
+type BaseGroupHeaderData = { data: any; startAt?: Dayjs; endAt?: Dayjs };
 
 export interface GanttBarData<T = any> {
   row: Row<T>;
@@ -47,15 +43,15 @@ export type GroupGanttBarProps<T, D> = NodeProps<GroupGanttBarData<T, D>> & {
   setNodes: React.Dispatch<React.SetStateAction<GanttNode<T, D>[]>>;
 };
 
-export type GroupOption<T, D extends BaseGroupHeaderData = any> = {
-  groupHeaderBuilder?: (row: Row<T>) => D;
-  groupKey: ((data: T) => string) | keyof T;
+export type GroupOption<T, D = BaseGroupHeaderData> = {
+  groupHeaderBuilder?: (row: Row<T>) => BaseGroupHeaderData;
+  groupKey: ((data: T) => Key) | keyof T;
   groupId: string;
   isFixedX?: boolean;
   groupGanttComponent: FC<GroupGanttBarProps<T, D>>;
 };
 
-type GanttProps<T = AnyObject> = {
+type GanttProps<T extends object = any> = {
   data: T[];
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
@@ -64,14 +60,16 @@ type GanttProps<T = AnyObject> = {
   height?: CSSProperties["height"];
   getBarStart: (row: T) => Dayjs | undefined;
   getBarEnd: (row: T) => Dayjs | undefined;
-  getFrontLinkIds: (row: T) => string[];
-  getPostLinkIds: (row: T) => string[];
-  getRowId: (row: T) => string;
+  getFrontLinkIds: (row: T) => Key[];
+  getPostLinkIds: (row: T) => Key[];
+  getRowId: (row: Row<T>) => string;
+  groupGap?: number;
 };
 
-export const Gantt = (props: GanttProps<AnyObject>) => {
+export const Gantt = (props: GanttProps) => {
   const {
     height = 800,
+    groupGap = 10,
     data,
     groupOptions,
     isGroupView,
@@ -97,12 +95,15 @@ export const Gantt = (props: GanttProps<AnyObject>) => {
     <div className={styles.VirtualGantt}>
       <div style={{ display: "flex" }}>
         <VirtualTable
+          groupGap={groupGap}
           style={{
             overflow: "auto",
             height,
             width: 500,
             flexShrink: 0,
+            position: "relative",
           }}
+          headerHeight={60}
           rowHeight={40}
           isGroupView={isGroupView}
           groupOptions={groupOptions}
@@ -185,7 +186,9 @@ export const Gantt = (props: GanttProps<AnyObject>) => {
         <ReactFlowProvider>
           <VirtualGantt
             GanttBar={GanttBar}
+            groupGap={groupGap}
             rowHeight={40}
+            headerHeight={[30]}
             getFrontLinkIds={getFrontLinkIds}
             getPostLinkIds={getPostLinkIds}
             getRowId={getRowId}

@@ -30,12 +30,16 @@ type VirtualTableProps<T = AnyObject> = {
     rowKey: string;
   }) => ReactNode;
   rowHeight: number;
+  headerHeight?: number;
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
+  groupGap?: number;
 };
 
 export const VirtualTable = (props: VirtualTableProps) => {
   const {
+    groupGap = 10,
+    headerHeight = 40,
     columns,
     data,
     cellRender,
@@ -83,6 +87,9 @@ export const VirtualTable = (props: VirtualTableProps) => {
           return !!table.getColumn(groupId);
         })
       );
+      setTimeout(() => {
+        table.toggleAllRowsExpanded(true);
+      }, 10);
     } else {
       table.setGrouping([]);
     }
@@ -95,7 +102,10 @@ export const VirtualTable = (props: VirtualTableProps) => {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => rowHeight,
+    estimateSize: (index) => {
+      const row = rows[index];
+      return rowHeight;
+    },
     overscan: 10,
   });
 
@@ -107,74 +117,112 @@ export const VirtualTable = (props: VirtualTableProps) => {
     overscan: 5,
   });
 
+  const bodyVisibleHeight =
+    (parentRef.current?.clientHeight ?? 0) - headerHeight;
+
+  const ganttBodyHeight = rowVirtualizer.getTotalSize();
+  const scrollHeight = ganttBodyHeight + headerHeight;
+  const scrollWidth = table
+    .getHeaderGroups()[0]
+    .headers.filter((header) => !grouping.includes(header.column.id))
+    .reduce((total, cur) => total + cur.getSize(), 0);
+
   return (
     <div
       ref={parentRef}
       className={["gantt-container", "container", "gantt-table"].join(" ")}
       style={style}
     >
-      <div style={{ height: `${rowVirtualizer.getTotalSize() + 60}px` }}>
-        <div style={{ display: "flex", position: "sticky", top: 0, zIndex: 1 }}>
+      <div
+        className="gantt-scroll-container"
+        style={{
+          height: scrollHeight,
+          width: scrollWidth,
+        }}
+      >
+        <div
+          className="table-header"
+          style={{
+            display: "flex",
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+            flexDirection: "column",
+          }}
+        >
           {table.getHeaderGroups().map((headerGroup) => (
             <div key={headerGroup.id} style={{ display: "flex" }}>
-              {headerGroup.headers.map((header) => {
-                return (
-                  <div
-                    key={header.id}
-                    // colSpan={header.colSpan}
-                    style={{
-                      width: header.getSize(),
-                      height: 60,
-                      flexShrink: 0,
-                      background: "black",
-                      color: "white",
-                      fontWeight: "bolder",
-                    }}
-                  >
-                    {header.isPlaceholder ? null : (
-                      <div
-                        {...{
-                          className: header.column.getCanSort()
-                            ? "cursor-pointer select-none"
-                            : "",
-                          onClick: header.column.getToggleSortingHandler(),
-                        }}
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {{
-                          asc: " 🔼",
-                          desc: " 🔽",
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {headerGroup.headers
+                .filter((header) => !grouping.includes(header.column.id))
+                .map((header) => {
+                  return (
+                    <div
+                      key={header.id}
+                      // colSpan={header.colSpan}
+                      style={{
+                        width: header.getSize(),
+                        height: 60,
+                        background: "black",
+                        color: "white",
+                        fontWeight: "bolder",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div
+                          {...{
+                            className: header.column.getCanSort()
+                              ? "cursor-pointer select-none"
+                              : "",
+                            onClick: header.column.getToggleSortingHandler(),
+                          }}
+                        >
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {{
+                            asc: " 🔼",
+                            desc: " 🔽",
+                          }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           ))}
         </div>
         <div
+          className="table-body"
           style={{
-            width: table
-              .getHeaderGroups()[0]
-              .headers.reduce((total, cur) => total + cur.getSize(), 0),
+            position: "absolute",
+            display: "flex",
+            flexDirection: "column",
+            top: headerHeight,
+            width: scrollWidth,
+            height: Math.max(ganttBodyHeight, bodyVisibleHeight),
+            zIndex: 0,
+            backgroundColor: "white",
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
             const row = rows[virtualRow.index] as Row<(typeof data)[0]>;
+            const isGroupRow = row.getIsGrouped();
             return (
               <div
                 key={row.id}
                 style={{
                   display: "flex",
                   height: `${virtualRow.size}px`,
+                  width: "100%",
+                  // transform: `translateY(${virtualRow.start}px)`,
+                  borderTop: isGroupRow ? "1px solid black" : "",
+                  borderBottom: "1px solid black",
                   transform: `translateY(${
                     virtualRow.start - index * virtualRow.size
                   }px)`,
-                  borderBottom: "1px solid black",
+                  marginTop: isGroupRow ? groupGap : "unset",
                 }}
               >
                 {columnVirtualizer.getVirtualItems().map((virtualColumn) => {

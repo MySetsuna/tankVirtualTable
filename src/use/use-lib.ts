@@ -1,18 +1,21 @@
-import dayjs, { Dayjs } from "dayjs";
-import { Person } from "../makeData";
+import dayjs from "dayjs";
+import { Task } from "../makeData";
+import { Row } from "@tanstack/react-table";
 
-export const getFrontLinkIds = (row: Person) => {
-  return [`${row.id + 2}`, `${row.id + 1}`];
+export const getFrontLinkIds = (row: Task) => {
+  return row.fromDepsIds;
 };
 
-export const getPostLinkIds = (row: Person) => {
-  return [`${row.id - 1}`, `${row.id - 2}`];
+export const getPostLinkIds = (row: Task) => {
+  return row.fromDepsIds;
 };
 
-export const getRowId = (row: Person) => `${row.id}`;
+export const getRowId = (row: Row<Task>) => {
+  return row.id;
+};
 
-export const getBarEnd = (row: Person) =>
+export const getBarEnd = (row: Task) =>
   row.endAt ? dayjs(row.endAt) : undefined;
 
-export const getBarStart = (row: Person) =>
-  row.createdAt ? dayjs(row.createdAt) : undefined;
+export const getBarStart = (row: Task) =>
+  row.startAt ? dayjs(row.startAt) : undefined;

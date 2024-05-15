@@ -240,8 +240,8 @@ export const getGanttStyleByStart = ({
   };
 };
 
-export const getNodes = (
-  rows: Row<AnyObject>[],
+export const getNodes = <T>(
+  rows: Row<T>[],
   virtualItems: VirtualItem[],
   getDayDiff: (
     date?: Dayjs,
@@ -249,17 +249,18 @@ export const getNodes = (
     defaultDiff?: number
   ) => number,
   startDate: Dayjs,
-  getBarStart: (row: AnyObject) => Dayjs | undefined,
-  getBarEnd: (row: AnyObject) => Dayjs | undefined,
+  getBarStart: (row: T) => Dayjs | undefined,
+  getBarEnd: (row: T) => Dayjs | undefined,
   cellWidth: number,
   minBarRange: number,
-  getRowId: (row: AnyObject) => string,
-  groupOptions?: GroupOption<AnyObject>[],
+  getRowId: (row: Row<T>) => string,
+  groupGap: number,
+  isGroupView: boolean,
+  groupOptions?: GroupOption<T>[],
   margin = 4
-): GanttNode<AnyObject>[] => {
-  const nodes: Node<
-    GanttBarData<AnyObject> | GroupGanttBarData<AnyObject, any>
-  >[] = virtualItems.map((virtualRow, index) => {
+): GanttNode<T>[] => {
+  const nodes: Node<GanttBarData<T> | GroupGanttBarData<T, any>>[] = [];
+  virtualItems.forEach((virtualRow, index) => {
     /**
      * 
 groupingColumnId
@@ -269,19 +270,21 @@ groupingValue
 : 
 "2024-06"
      */
-    const row = rows[virtualRow.index] as Row<AnyObject>;
+    const row = rows[virtualRow.index] as Row<T>;
     const option = groupOptions?.find(
       ({ groupId }) => groupId === row.groupingColumnId
     );
-    const id = getRowId(row.original);
-    const barStart = getBarStart(row.original);
-    const barEnd = getBarEnd(row.original);
-    const height = virtualRow.size - margin * 2;
-    const y = virtualRow.start + margin;
-    const width = getDayDiff(barStart, barEnd, minBarRange) * cellWidth;
+    const group = option?.groupHeaderBuilder?.(row);
+    const isGroupRow = isGroupView && !!group;
+    const id = getRowId(row);
+    const barStart = isGroupRow ? group?.startAt : getBarStart(row.original);
+    const barEnd = isGroupRow ? group?.endAt : getBarEnd(row.original);
+    const height = virtualRow.size - margin * 2 - (isGroupRow ? groupGap : 0);
+    const y = virtualRow.start + margin + (isGroupRow ? groupGap : 0);
+    const width = (getDayDiff(barEnd, barStart, minBarRange) + 1) * cellWidth;
     const diff = getDayDiff(barStart ?? barEnd?.add(-1, "day"), startDate, 0);
 
-    return {
+    nodes.push({
       id,
       // height,
       // width,
@@ -306,7 +309,30 @@ groupingValue
         cursor: option?.isFixedX ? "auto" : "grab",
       },
       type: row.groupingColumnId ?? "gantbar",
-    };
+    });
   });
   return nodes;
+};
+
+export const getStartAndEnd = <T>(
+  leafRows: Row<T>[],
+  getStart: (data: T) => Dayjs | undefined,
+  getEnd: (data: T) => Dayjs | undefined
+) => {
+  let startAt: Dayjs | undefined = undefined;
+  let endAt: Dayjs | undefined = undefined;
+  leafRows.forEach(({ original }) => {
+    const start = getStart(original);
+    const end = getEnd(original);
+    if ((!startAt && start) || start?.isBefore(startAt)) {
+      startAt = start;
+    }
+    if ((!end && end) || end?.isAfter(endAt)) {
+      endAt = end;
+    }
+  });
+  return {
+    startAt,
+    endAt,
+  };
 };
