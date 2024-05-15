@@ -1,4 +1,4 @@
-import React, { CSSProperties, FC } from "react";
+import React, { CSSProperties, FC, useState } from "react";
 import ScrollMirror from "scrollmirror";
 import { VirtualTable } from "./components/VirtualTable";
 import { TextField } from "@radix-ui/themes";
@@ -83,6 +83,8 @@ export const Gantt = (props: GanttProps<AnyObject>) => {
     getPostLinkIds,
     getRowId,
   } = props;
+
+  const [expandIds, setExpandIds] = useState<string[]>([]);
 
   React.useEffect(() => {
     new ScrollMirror(document.querySelectorAll(".gantt-container"), {

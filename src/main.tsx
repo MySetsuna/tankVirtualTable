@@ -15,7 +15,7 @@ import {
   getRowId,
 } from "./use/use-lib";
 
-const mdata = makeData(50_0);
+const mdata = makeData(50);
 type TData = (typeof mdata)[0];
 
 const groupOptionMap: { [key: string]: GroupOption<TData> } = {
