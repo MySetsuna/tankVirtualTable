@@ -96,8 +96,7 @@ export const Gantt = (props: GanttProps<AnyObject>) => {
       <div style={{ display: "flex" }}>
         <VirtualTable
           style={{
-            overflowX: "auto",
-            overflowY: "hidden",
+            overflow: "auto",
             height,
             width: 500,
             flexShrink: 0,

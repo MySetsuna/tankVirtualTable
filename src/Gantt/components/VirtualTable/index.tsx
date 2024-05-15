@@ -64,9 +64,8 @@ export const VirtualTable = (props: VirtualTableProps) => {
 
   const table = useReactTable({
     data,
-    columns,
+    columns: [...columns, ...groupColumns],
     state: {
-      // grouping: ["age"],
       sorting,
     },
 
@@ -111,7 +110,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
   return (
     <div
       ref={parentRef}
-      className={["gantt-container", "container"].join(" ")}
+      className={["gantt-container", "container", "gantt-table"].join(" ")}
       style={style}
     >
       <div style={{ height: `${rowVirtualizer.getTotalSize() + 60}px` }}>

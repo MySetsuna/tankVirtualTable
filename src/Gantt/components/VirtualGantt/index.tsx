@@ -5,6 +5,7 @@ import {
   Row,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getGroupedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
@@ -266,6 +267,7 @@ export const VirtualGantt = forwardRef((props: VirtualGanttProps, ref) => {
     enableGrouping: false,
     getCoreRowModel: getCoreRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     // debugTable: true,
   });
 

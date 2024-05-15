@@ -20,5 +20,11 @@
     .react-flow__resize-control.line.bottom {
       cursor: auto;
     }
+
+    .gantt-table {
+      ::-webkit-scrollbar {
+        display: none;
+      }
+    }
   }
 }

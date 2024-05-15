@@ -27,7 +27,17 @@ const groupOptionMap: { [key: string]: GroupOption<TData> } = {
     groupHeaderBuilder(row: Row<TData>) {
       return row;
     },
-    groupGanttComponent: () => <>77777</>,
+    groupGanttComponent: ({ data }) => {
+      const { row, group } = data;
+      console.log(row);
+
+      return (
+        <div onClick={() => row.getToggleExpandedHandler()}>
+          <span>{row.getIsExpanded() ? "👇" : "👉"}</span>
+          <span>{row.groupingValue as string}</span>
+        </div>
+      );
+    },
     isFixedX: true,
   },
   date: {
@@ -49,7 +59,9 @@ function App() {
     GroupOption<(typeof mdata)[0]>[]
   >([]);
 
-  const [ganttMode, setGanttMode] = React.useState<GanttMode>(GanttMode.WeekDay);
+  const [ganttMode, setGanttMode] = React.useState<GanttMode>(
+    GanttMode.WeekDay
+  );
 
   const [selectDate, setSelectDate] = React.useState<Dayjs>(dayjs());
 
