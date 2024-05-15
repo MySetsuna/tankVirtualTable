@@ -219,8 +219,12 @@ export const getGanttStyleByStart = ({
   cellWidth,
   minBarRange,
 }: GanttStyleByStartParams) => {
-  if (barStart || barEnd) {
-    const diff = getDayDiff(barStart ?? barEnd?.add(-1, "day"), startDate, 0);
+  if ((barStart && barEnd) || ((barStart || barEnd) && minBarRange)) {
+    const diff = getDayDiff(
+      barStart ?? barEnd?.add(-minBarRange, "day"),
+      startDate,
+      0
+    );
     const style: CSSProperties = {
       position: "absolute",
       // transform: `translateX(${}px) `,
