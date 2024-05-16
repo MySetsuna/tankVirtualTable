@@ -1,18 +1,18 @@
-import React from "react";
+import React from 'react';
 import {
   Handle,
   NodeResizer,
   Position,
   ResizeDragEvent,
   ResizeParams,
-} from "reactflow";
-import { GanttBarBoxProps } from "../..";
+} from 'reactflow';
+import { GanttBarBoxProps } from '../..';
 
 export const GanttBarBox = (props: GanttBarBoxProps) => {
   const { children, ...rest } = props;
   const { data, setNodes } = rest;
   const { height, minWidth, index } = rest.data;
-  const row = rest.data.row;
+  const { row } = rest.data;
   const onResizeEnd = (_event: ResizeDragEvent, params: ResizeParams) => {
     setNodes((nodes) => {
       return nodes.map((node) => {
@@ -48,7 +48,7 @@ export const GanttBarBox = (props: GanttBarBoxProps) => {
         minHeight={height}
         maxHeight={height}
         lineStyle={{
-          backgroundColor: "#00000000",
+          backgroundColor: '#00000000',
           width: 6,
         }}
         onResizeEnd={onResizeEnd}
@@ -63,7 +63,7 @@ export const GanttBarBox = (props: GanttBarBoxProps) => {
               index + row.id + 100
             }, 1)`,
             height,
-            overflow: "hidden",
+            overflow: 'hidden',
           }}
           className="gantt-bar77"
         >

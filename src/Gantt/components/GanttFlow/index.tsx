@@ -1,4 +1,5 @@
-import React, { ReactNode, useCallback } from "react";
+/* eslint-disable no-param-reassign */
+import React, { ReactNode, useCallback } from 'react';
 import ReactFlow, {
   MarkerType,
   NodeChange,
@@ -6,11 +7,11 @@ import ReactFlow, {
   addEdge,
   applyNodeChanges,
   useEdgesState,
-} from "reactflow";
-import "reactflow/dist/style.css";
-import { AnyObject } from "../VirtualGantt";
-import { GanttNode } from "../..";
-import { isNumber } from "lodash";
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import { AnyObject } from '../VirtualGantt';
+import { GanttNode } from '../..';
+import { isNumber } from 'lodash';
 
 type GanttFlowProps = {
   children: ReactNode;
@@ -25,7 +26,7 @@ function GanttFlow(props: GanttFlowProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const onConnect = useCallback(
-    (connection) => setEdges((eds) => addEdge(connection, eds)),
+    (connection: any) => setEdges((eds) => addEdge(connection, eds)),
     [setEdges]
   );
 
@@ -33,7 +34,7 @@ function GanttFlow(props: GanttFlowProps) {
     setNodes((nds) => {
       const parsedChanges = changes.map((change) => {
         if (
-          change.type === "position" &&
+          change.type === 'position' &&
           change.position &&
           change.positionAbsolute
         ) {
@@ -61,9 +62,9 @@ function GanttFlow(props: GanttFlowProps) {
 
   const onNodesDragStop = useCallback(
     (
-      event,
-      changeNode: GanttNode<AnyObject>,
-      nodes: GanttNode<AnyObject>[]
+      _event,
+      changeNode: GanttNode<AnyObject>
+      // nodes: GanttNode<AnyObject>[]
     ) => {
       if (isNumber(changeNode.data.fixedX)) return;
       setNodes((nodes) => {
@@ -93,7 +94,7 @@ function GanttFlow(props: GanttFlowProps) {
           type: MarkerType.ArrowClosed,
         },
         style: {
-          // stroke: "black",
+          stroke: 'black',
         },
         // type:"step"
         // type:'simplebezier'
@@ -113,7 +114,7 @@ function GanttFlow(props: GanttFlowProps) {
       autoPanOnNodeDrag={false}
       autoPanOnConnect={false}
       panActivationKeyCode={null}
-      style={{ backgroundColor: "red" }}
+      style={{ backgroundColor: 'red' }}
     >
       {children}
     </ReactFlow>

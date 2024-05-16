@@ -1,0 +1,29 @@
+.myTable {
+  width: 100%;
+  overflow: hidden;
+  .tableTitleNode {
+    display: inline-flex;
+    align-items: center;
+  }
+  :global {
+    .tr-empty {
+      background-color: #333;
+      > .ant-table-cell-fix-left,
+      > .ant-table-cell-fix-right {
+        background-color: #333;
+        position: static !important;
+      }
+      td {
+        border-inline-end: none !important;
+        height: 10px !important;
+        padding: 0 !important;
+      }
+    }
+    .tr-title {
+      background-color: #444;
+      td {
+        background-color: #444;
+      }
+    }
+  }
+}

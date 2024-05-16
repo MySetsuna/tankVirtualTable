@@ -1,16 +1,21 @@
-import React, { CSSProperties, FC, Key, useState } from "react";
-import ScrollMirror from "scrollmirror";
-import { VirtualTable } from "./components/VirtualTable";
-import { TextField } from "@radix-ui/themes";
-import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
-import { GanttMode, VirtualGantt } from "./components/VirtualGantt";
-import { Dayjs } from "dayjs";
-import { Row } from "@tanstack/react-table";
-import { GanttBar } from "../use/GanttBar";
-import { Node, NodeProps, ReactFlowProvider } from "reactflow";
-import styles from "./index.module.scss";
+import React, { CSSProperties, FC, Key, ReactNode } from 'react';
+import ScrollMirror from 'scrollmirror';
+import {
+  BufferMonths,
+  GanttMode,
+  VirtualGantt,
+} from './components/VirtualGantt';
+import { Dayjs } from 'dayjs';
+import { Row } from '@tanstack/react-table';
+import { Node, NodeProps, ReactFlowProvider } from 'reactflow';
+import styles from './index.module.scss';
 
-type BaseGroupHeaderData = { data: any; startAt?: Dayjs; endAt?: Dayjs };
+export type BaseGroupHeaderData = {
+  id: Key;
+  data: any;
+  startAt?: Dayjs;
+  endAt?: Dayjs;
+};
 
 export interface GanttBarData<T = any> {
   row: Row<T>;
@@ -37,10 +42,14 @@ export type GanttBarBoxProps<T = any> = CmpWithChildrenFn<GanttBarProps<T>>;
 
 export type GanttBarProps<T> = NodeProps<GanttBarData<T>> & {
   setNodes: React.Dispatch<React.SetStateAction<GanttNode<T>[]>>;
+  onNodesChange: (changes: any) => void;
 };
 
 export type GroupGanttBarProps<T, D> = NodeProps<GroupGanttBarData<T, D>> & {
   setNodes: React.Dispatch<React.SetStateAction<GanttNode<T, D>[]>>;
+  onNodesChange: (changes: any) => void;
+  // setExpandKeys: React.Dispatch<React.SetStateAction<readonly React.Key[]>>;
+  // expandKeys: readonly React.Key[];
 };
 
 export type GroupOption<T, D = BaseGroupHeaderData> = {
@@ -53,23 +62,39 @@ export type GroupOption<T, D = BaseGroupHeaderData> = {
 
 type GanttProps<T extends object = any> = {
   data: T[];
+  rowHeight?: number;
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
   ganttMode: GanttMode;
   selectDate: Dayjs;
-  height?: CSSProperties["height"];
   getBarStart: (row: T) => Dayjs | undefined;
   getBarEnd: (row: T) => Dayjs | undefined;
   getFrontLinkIds: (row: T) => Key[];
   getPostLinkIds: (row: T) => Key[];
   getRowId: (row: Row<T>) => string;
   groupGap?: number;
+  GanttBar: (props: NodeProps<GanttBarData<T>>) => ReactNode;
+  table: ReactNode;
+  headerHeight?: [number] | [number, number] | [number, number, number];
+  style?: CSSProperties;
+  bufferMonths?: BufferMonths;
+  bufferDay?: number;
+  scrollSyncClassName: string;
 };
 
 export const Gantt = (props: GanttProps) => {
   const {
-    height = 800,
     groupGap = 10,
+    style = {
+      position: 'relative',
+      overflow: 'auto',
+      width: 1200,
+      height: 800,
+      flex: 'auto',
+    },
+    bufferDay = 40,
+    bufferMonths = [2, 2],
+    rowHeight,
     data,
     groupOptions,
     isGroupView,
@@ -80,12 +105,14 @@ export const Gantt = (props: GanttProps) => {
     getFrontLinkIds,
     getPostLinkIds,
     getRowId,
+    GanttBar,
+    table,
+    headerHeight,
+    scrollSyncClassName,
   } = props;
 
-  const [expandIds, setExpandIds] = useState<string[]>([]);
-
   React.useEffect(() => {
-    new ScrollMirror(document.querySelectorAll(".gantt-container"), {
+    new ScrollMirror(document.querySelectorAll(`.${scrollSyncClassName}`), {
       horizontal: false,
       proportional: false,
     });
@@ -93,124 +120,29 @@ export const Gantt = (props: GanttProps) => {
 
   return (
     <div className={styles.VirtualGantt}>
-      <div style={{ display: "flex" }}>
-        <VirtualTable
+      <ReactFlowProvider>
+        <VirtualGantt
+          GanttBar={GanttBar}
           groupGap={groupGap}
-          style={{
-            overflow: "auto",
-            height,
-            width: 500,
-            flexShrink: 0,
-            position: "relative",
-          }}
-          headerHeight={60}
-          rowHeight={40}
-          isGroupView={isGroupView}
-          groupOptions={groupOptions}
-          columns={[
-            {
-              accessorKey: "id",
-
-              header: "ID",
-              size: 160,
-            },
-            {
-              accessorKey: "firstName",
-              cell: (info) => info.getValue(),
-              size: 160,
-            },
-            {
-              accessorFn: (row) => row.lastName,
-              id: "lastName",
-              cell: (info) => info.getValue(),
-              header: () => <span>Last Name</span>,
-              size: 160,
-            },
-            {
-              accessorKey: "age",
-              size: 150,
-              header: () => "Age",
-              aggregatedCell: ({ getValue }) =>
-                Math.round(getValue<number>() * 100) / 100,
-              aggregationFn: "median",
-            },
-            {
-              accessorKey: "visits",
-              header: () => <span>Visits</span>,
-              size: 150,
-            },
-            {
-              accessorKey: "status",
-              header: "Status",
-              size: 100,
-            },
-            {
-              accessorKey: "progress",
-              header: "Profile Progress",
-              size: 180,
-            },
-
-            {
-              accessorKey: "createdAt",
-              header: "Created At",
-              cell: (info) => info.getValue<Date>().toLocaleString(),
-              size: 200,
-            },
-            {
-              accessorKey: "progress1",
-              header: "Profile Progress",
-              size: 180,
-            },
-          ]}
-          cellRender={({ content, width, isActive: isEditing }) => {
-            if (isEditing) {
-              return (
-                <TextField.Root
-                  placeholder="Search the docs…"
-                  defaultValue={content}
-                  style={{
-                    display: "flex",
-                    width: `${width}px`,
-                  }}
-                >
-                  <TextField.Slot>
-                    <MagnifyingGlassIcon height="16" width="16" />
-                  </TextField.Slot>
-                </TextField.Root>
-              );
-            }
-            return content;
-          }}
+          rowHeight={rowHeight}
+          headerHeight={headerHeight}
+          getFrontLinkIds={getFrontLinkIds}
+          getPostLinkIds={getPostLinkIds}
+          getRowId={getRowId}
+          getBarEnd={getBarEnd}
+          getBarStart={getBarStart}
+          mode={ganttMode}
+          currentAt={selectDate}
+          bufferMonths={bufferMonths}
+          bufferDay={bufferDay}
           data={data}
+          groupOptions={groupOptions}
+          isGroupView={isGroupView}
+          style={style}
+          scrollSyncClassName={scrollSyncClassName}
+          table={table}
         />
-        <ReactFlowProvider>
-          <VirtualGantt
-            GanttBar={GanttBar}
-            groupGap={groupGap}
-            rowHeight={40}
-            headerHeight={[30]}
-            getFrontLinkIds={getFrontLinkIds}
-            getPostLinkIds={getPostLinkIds}
-            getRowId={getRowId}
-            getBarEnd={getBarEnd}
-            getBarStart={getBarStart}
-            mode={ganttMode}
-            currentAt={selectDate}
-            bufferMonths={[2, 2]}
-            bufferDay={40}
-            data={data}
-            groupOptions={groupOptions}
-            isGroupView={isGroupView}
-            style={{
-              position: "relative",
-              overflow: "auto",
-              width: 1200,
-              height,
-              flex: "auto",
-            }}
-          />
-        </ReactFlowProvider>
-      </div>
+      </ReactFlowProvider>
     </div>
   );
 };
