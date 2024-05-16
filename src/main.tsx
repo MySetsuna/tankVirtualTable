@@ -15,7 +15,7 @@ import {
   getRowId,
 } from "./use/use-lib";
 import { getStartAndEnd } from "./Gantt/components/VirtualGantt/utils";
-import { GroupKeyer } from "./typing/gantt";
+import { GroupKeyer } from "./Gantt/types/gantt";
 import { getGroupOptions } from "./use/use-hepler";
 
 const mdata = makeData(50);

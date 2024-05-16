@@ -4,7 +4,7 @@ import { GroupOption } from "../Gantt";
 import { getStartAndEnd } from "../Gantt/components/VirtualGantt/utils";
 import dayjs, { Dayjs } from "dayjs";
 import { Task } from "../makeData";
-import { GroupKeyer } from "../typing/gantt";
+import { GroupKeyer } from "../Gantt/types/gantt";
 
 export const getGroupOptions = (
   grouping: GroupKeyer<Task>[],
