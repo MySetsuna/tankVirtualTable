@@ -9,10 +9,14 @@ html {
   font-size: 14px;
 }
 
-/* body {
-  padding: 1rem;
-} */
+body {
+  margin: 0;
+}
 
+.tr-title {
+  height: 38px;
+  line-height:1 !important
+}
 
 
 /* .gantt-line-body{

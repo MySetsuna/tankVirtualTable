@@ -1,14 +1,16 @@
-import React from 'react';
-import dayjs from 'dayjs';
-import { BaseGroupHeaderData, GroupGanttBarProps } from '@/components/Gantt';
-import { IApiArtTask } from '@/model/pmstation/api-modules/art-task';
+import React from "react";
+import dayjs from "dayjs";
+import { IApiArtTask } from "../../../art-task";
+import {
+  BaseGroupHeaderData,
+  GanttBarProps,
+  GroupGanttBarProps,
+} from "../../../../Gantt";
 
-type IProps = GroupGanttBarProps<IApiArtTask, BaseGroupHeaderData>;
+type IProps = GanttBarProps<IApiArtTask>;
 export const GanttBar = (props: IProps) => {
   const { data, id } = props;
   const { height, index, row, fixedX, fixedY } = data;
-
-  console.log(fixedX, fixedY);
 
   return (
     <div
@@ -17,12 +19,13 @@ export const GanttBar = (props: IProps) => {
           index + row.id + 100
         }, 1)`,
         height,
-        overflow: 'hidden',
+        overflow: "hidden",
       }}
       className="gantt-bar"
       id={id}
     >
-      {dayjs(row.original.startAt).format('YYYYMMDD')}
+      {row.original.title}~{dayjs(row.original.startAt).format("YYYY-MM--DD")}~
+      {dayjs(row.original.endAt).format("YYYY-MM--DD")}
     </div>
   );
 };

@@ -1,23 +1,6 @@
 import { faker } from "@faker-js/faker";
 import dayjs from "dayjs";
-
-export type Task = {
-  id: number;
-  storyId: number;
-  process: number;
-  effort: number;
-  startAt: Date;
-  endAt: Date;
-  title: string;
-  fromDepsIds: number[];
-  toDepsIds: number[];
-  status: "done" | "working" | "new";
-};
-
-export type Story = {
-  id: number;
-  title: string;
-};
+import { IApiArtPip, IApiArtStory, IApiArtTask } from "./use/art-task";
 
 const range = (len: number) => {
   const arr: number[] = [];
@@ -27,76 +10,114 @@ const range = (len: number) => {
   return arr;
 };
 
-export const columnKeys = [
-  "id",
-  "storyId",
-  "process",
-  "effort",
-  "startAt",
-  "endAt",
-  "title",
-  "fromDepsIds",
-  "toDepsIds",
-  "status",
-];
-
-const newTask = (index: number, len): Task => {
+const newTask = (index: number, len): IApiArtTask => {
   const today = dayjs();
   return {
-    id: index + 1,
+    artTaskId: index + 1,
     title: faker.word.verb(),
-    storyId: faker.helpers.shuffle<Task["storyId"]>([
-      1, 2, 3, 4, 5, 6, 7.8,
+    artStoryId: faker.datatype.number(19),
+    artPipId: faker.datatype.number(50),
+    artCategory: faker.helpers.shuffle<IApiArtTask["artCategory"]>([
+      "分类1",
+      "分类2",
+      "分类3",
     ])[0]!,
-    process: faker.datatype.number(100),
+    progress: faker.datatype.number(100),
     effort: faker.datatype.number(10000),
-    startAt: faker.datatype.datetime({
-      max: today.add(10, "day").valueOf(),
-      min: today.add(0, "day").valueOf(),
-    }),
-    endAt: faker.datatype.datetime({
-      max: today.add(20, "day").valueOf(),
-      min: today.add(11, "day").valueOf(),
-    }),
-    fromDepsIds: Array(faker.datatype.number(10))
+    startAt: faker.datatype
+      .datetime({
+        max: today.add(10, "day").valueOf(),
+        min: today.add(0, "day").valueOf(),
+      })
+      .toLocaleDateString(),
+    endAt: faker.datatype
+      .datetime({
+        max: today.add(20, "day").valueOf(),
+        min: today.add(11, "day").valueOf(),
+      })
+      .toLocaleDateString(),
+    FromDependIds: Array(faker.datatype.number(10))
       .fill(0)
       .map(() => faker.datatype.number(len)),
-    toDepsIds: Array(faker.datatype.number(10))
+    ToDependIds: Array(faker.datatype.number(10))
       .fill(0)
       .map(() => faker.datatype.number(len)),
-    status: faker.helpers.shuffle<Task["status"]>([
+    status: faker.helpers.shuffle<IApiArtTask["status"]>([
       "done",
       "working",
       "new",
     ])[0]!,
-    // age: faker.datatype.number(40),
-    // visits: faker.datatype.number(1000),
-    // progress: faker.datatype.number(100),
-    // progress1: faker.datatype.number(50),
-    // progress2: faker.datatype.number(50),
-    // createdAt: faker.datatype.datetime({
-    //   max: dayjs().add(10, "week").valueOf(),
-    //   min: dayjs().add(-10, "week").valueOf(),
-    // }),
-    // createdAt2: faker.datatype.datetime({
-    //   max: dayjs().add(10, "week").valueOf(),
-    //   min: dayjs().add(-10, "week").valueOf(),
-    // }),
-    // status: faker.helpers.shuffle<Task["status"]>([
-    //   "relationship",
-    //   "complicated",
-    //   "single",
-    // ])[0]!,
-    // type: faker.helpers.shuffle<Task["type"]>([1, 2, 3])[0]!,
   };
 };
 
-export function makeData(...lens: number[]) {
-  const makeDataLevel = (depth = 0): Task[] => {
+const newStory = (index: number, len): IApiArtStory => {
+  const today = dayjs();
+  return {
+    artStoryId: index,
+    title: faker.word.verb(),
+    artPipId: faker.datatype.number(5),
+    status: faker.helpers.shuffle<IApiArtStory["status"]>([
+      "done",
+      "working",
+      "new",
+    ])[0]!,
+    createdAt: faker.datatype
+      .datetime({
+        max: today.add(20, "day").valueOf(),
+        min: today.add(11, "day").valueOf(),
+      })
+      .toDateString(),
+  };
+};
+
+const newArtPip = (index: number, len): IApiArtPip => {
+  const today = dayjs();
+  return {
+    artPipId: index,
+    name: faker.word.verb(),
+    category: faker.helpers.shuffle<IApiArtPip["category"]>([
+      "分类1",
+      "分类2",
+      "分类3",
+      "分类4",
+    ])[0]!,
+    count: faker.datatype.number(50),
+    fatherId: faker.datatype.number(len),
+  };
+};
+
+export function makeTask(...lens: number[]) {
+  const makeDataLevel = (depth = 0): IApiArtTask[] => {
     const len = lens[depth]!;
-    return range(len).map((d): Task => {
+    return range(len).map((d): IApiArtTask => {
       return {
         ...newTask(d, len),
+      };
+    });
+  };
+
+  return makeDataLevel();
+}
+
+export function makeStory(...lens: number[]) {
+  const makeDataLevel = (depth = 0): IApiArtStory[] => {
+    const len = lens[depth]!;
+    return range(len).map((d): IApiArtStory => {
+      return {
+        ...newStory(d, len),
+      };
+    });
+  };
+
+  return makeDataLevel();
+}
+
+export function makeArtPip(...lens: number[]) {
+  const makeDataLevel = (depth = 0): IApiArtPip[] => {
+    const len = lens[depth]!;
+    return range(len).map((d): IApiArtPip => {
+      return {
+        ...newArtPip(d, len),
       };
     });
   };

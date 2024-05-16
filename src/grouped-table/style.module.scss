@@ -7,10 +7,8 @@
   }
   :global {
     .tr-empty {
-      background-color: #333;
       > .ant-table-cell-fix-left,
       > .ant-table-cell-fix-right {
-        background-color: #333;
         position: static !important;
       }
       td {
@@ -20,9 +18,7 @@
       }
     }
     .tr-title {
-      background-color: #444;
       td {
-        background-color: #444;
       }
     }
   }

@@ -1,15 +1,15 @@
-import dayjs, { Dayjs } from 'dayjs';
-import { BufferMonths, GanttMode, HeadRender } from '.';
-import { ColumnDef, Row } from '@tanstack/react-table';
-import { CSSProperties } from 'react';
-import { Node } from 'reactflow';
-import { VirtualItem } from '@tanstack/react-virtual';
+import dayjs, { Dayjs } from "dayjs";
+import { BufferMonths, GanttMode, HeadRender } from ".";
+import { ColumnDef, Row } from "@tanstack/react-table";
+import { CSSProperties } from "react";
+import { Node } from "reactflow";
+import { VirtualItem } from "@tanstack/react-virtual";
 
-import weekOfYear from 'dayjs/plugin/weekOfYear';
-import weekYear from 'dayjs/plugin/weekYear';
-import 'dayjs/locale/zh-cn';
-import advancedFormat from 'dayjs/plugin/advancedFormat';
-import { GanttBarData, GanttNode, GroupGanttBarData, GroupOption } from '../..';
+import weekOfYear from "dayjs/plugin/weekOfYear";
+import weekYear from "dayjs/plugin/weekYear";
+import "dayjs/locale/zh-cn";
+import advancedFormat from "dayjs/plugin/advancedFormat";
+import { GanttBarData, GanttNode, GroupGanttBarData, GroupOption } from "../..";
 dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
@@ -24,13 +24,13 @@ export interface GroupingRow<TData> {
 export type GanttHeaderBuilder = typeof buildGanttHeader;
 
 export const WEEKDAY_MAP: { [key: number]: string } = {
-  0: '日',
-  1: '一',
-  2: '二',
-  3: '三',
-  4: '四',
-  5: '五',
-  6: '六',
+  0: "日",
+  1: "一",
+  2: "二",
+  3: "三",
+  4: "四",
+  5: "五",
+  6: "六",
 };
 
 export const buildGanttHeader = <T, M = GanttMode>(
@@ -41,36 +41,36 @@ export const buildGanttHeader = <T, M = GanttMode>(
   cellWidth = 50,
   isWeekStartMonday = true
 ): ColumnDef<any>[] => {
-  const timezone = isWeekStartMonday ? 'zh-cn' : 'en';
+  const timezone = isWeekStartMonday ? "zh-cn" : "en";
   if (mode === GanttMode.MonthDay) {
     const columns: ColumnDef<any>[] = [];
-    const startAtMonth = startAt.format('YYYY-MM');
-    const startAtDateNumber = startAt.get('date');
-    const endAtMonth = endAt.format('YYYY-MM');
-    const endAtDateNumber = endAt.get('date');
+    const startAtMonth = startAt.format("YYYY-MM");
+    const startAtDateNumber = startAt.get("date");
+    const endAtMonth = endAt.format("YYYY-MM");
+    const endAtDateNumber = endAt.get("date");
     for (
       let start = startAt;
-      start.get('year') <= endAt.get('year');
-      start = start.add(1, 'year')
+      start.get("year") <= endAt.get("year");
+      start = start.add(1, "year")
     ) {
-      const yearHeader = start.format('YYYY');
+      const yearHeader = start.format("YYYY");
       const monthColumns: ColumnDef<any>[] = [];
 
-      const startMonth = start === startAt ? startAt : start.startOf('year');
+      const startMonth = start === startAt ? startAt : start.startOf("year");
       const endMonth =
-        endAt.get('year') > startMonth.get('year')
-          ? startMonth.endOf('year')
+        endAt.get("year") > startMonth.get("year")
+          ? startMonth.endOf("year")
           : endAt;
       for (
         let start0 = startMonth;
-        start0.get('month') <= endMonth.get('month') &&
-        start0.get('year') <= endMonth.get('year');
-        start0 = start0.add(1, 'month')
+        start0.get("month") <= endMonth.get("month") &&
+        start0.get("year") <= endMonth.get("year");
+        start0 = start0.add(1, "month")
       ) {
-        const monthHeader = start0.format('YYYY-MM');
+        const monthHeader = start0.format("YYYY-MM");
 
-        const startDateNumber = start0.startOf('month').get('date');
-        const endDateNumber = start0.endOf('month').get('date');
+        const startDateNumber = start0.startOf("month").get("date");
+        const endDateNumber = start0.endOf("month").get("date");
         const dateColumns: ColumnDef<any>[] = [];
         const beginNumber =
           startAtMonth === monthHeader ? startAtDateNumber : startDateNumber;
@@ -102,20 +102,20 @@ export const buildGanttHeader = <T, M = GanttMode>(
   }
   if (GanttMode.WeekDay === mode) {
     const columns: ColumnDef<any>[] = [];
-    const startAtWeekOfYear = startAt.locale(timezone).format('YYYY-w');
-    const endAtWeekOfYear = endAt.locale(timezone).format('YYYY-w');
+    const startAtWeekOfYear = startAt.locale(timezone).format("YYYY-w");
+    const endAtWeekOfYear = endAt.locale(timezone).format("YYYY-w");
     for (
       let start = startAt;
-      start.get('year') <= endAt.get('year');
-      start = start.add(1, 'year')
+      start.get("year") <= endAt.get("year");
+      start = start.add(1, "year")
     ) {
-      const yearHeader = start.format('YYYY');
+      const yearHeader = start.format("YYYY");
       const monthColumns: ColumnDef<any>[] = [];
 
-      const startWeek = start === startAt ? startAt : start.startOf('year');
+      const startWeek = start === startAt ? startAt : start.startOf("year");
       const endWeek =
-        endAt.get('year') > startWeek.get('year')
-          ? startWeek.endOf('year')
+        endAt.get("year") > startWeek.get("year")
+          ? startWeek.endOf("year")
           : endAt;
 
       for (
@@ -123,21 +123,21 @@ export const buildGanttHeader = <T, M = GanttMode>(
         Number(
           `${start0.locale(timezone).weekYear()}${start0
             .locale(timezone)
-            .format('ww')}`
+            .format("ww")}`
         ) <=
           Number(
             `${endWeek.locale(timezone).weekYear()}${endWeek
               .locale(timezone)
-              .format('ww')}`
-          ) && start0.get('year') <= endWeek.get('year');
-        start0 = start0.add(7, 'day')
+              .format("ww")}`
+          ) && start0.get("year") <= endWeek.get("year");
+        start0 = start0.add(7, "day")
       ) {
-        const weekHeader = start0.locale(timezone).format('YYYY-w');
+        const weekHeader = start0.locale(timezone).format("YYYY-w");
 
-        const startDateWeek = start0.locale(timezone).startOf('week');
-        const endDateWeek = start0.locale(timezone).endOf('week');
+        const startDateWeek = start0.locale(timezone).startOf("week");
+        const endDateWeek = start0.locale(timezone).endOf("week");
 
-        if (startDateWeek.get('year') !== start.get('year')) {
+        if (startDateWeek.get("year") !== start.get("year")) {
           continue;
         }
         const dateColumns: ColumnDef<any>[] = [];
@@ -146,10 +146,10 @@ export const buildGanttHeader = <T, M = GanttMode>(
         const stop = endAtWeekOfYear === weekHeader ? endAt : endDateWeek;
         for (
           let start1 = begin;
-          start1.startOf('date').valueOf() <= stop.startOf('date').valueOf();
-          start1 = start1.add(1, 'day')
+          start1.startOf("date").valueOf() <= stop.startOf("date").valueOf();
+          start1 = start1.add(1, "day")
         ) {
-          const id = start1.format('YYYY-MM-DD');
+          const id = start1.format("YYYY-MM-DD");
           dateColumns.push({
             header:
               headRender?.date?.(start1) ||
@@ -182,8 +182,8 @@ export const getRangeAtByCurrentAt = (
 ) => {
   const preBuffer = bufferMonths[0];
   const nextBuffer = bufferMonths[1] || bufferMonths[0];
-  const startAt = currentAt.add(-preBuffer, 'month');
-  const endAt = currentAt.add(nextBuffer, 'month');
+  const startAt = currentAt.add(-preBuffer, "month");
+  const endAt = currentAt.add(nextBuffer, "month");
   return { startAt, endAt };
 };
 
@@ -193,7 +193,7 @@ export const getDayDiff = (
   defaultDiff = 0
 ) => {
   if (date && offsetDate) {
-    let diff = date.startOf('date').diff(offsetDate.startOf('date'), 'day');
+    let diff = date.startOf("date").diff(offsetDate.startOf("date"), "day");
     if (diff < 0) {
       diff -= 1;
     }
@@ -222,12 +222,12 @@ export const getGanttStyleByStart = ({
 }: GanttStyleByStartParams) => {
   if ((barStart && barEnd) || ((barStart || barEnd) && minBarRange)) {
     const diff = getDayDiff(
-      barStart ?? barEnd?.add(-minBarRange, 'day'),
+      barStart ?? barEnd?.add(-minBarRange, "day"),
       startDate,
       0
     );
     const style: CSSProperties = {
-      position: 'absolute',
+      position: "absolute",
       // transform: `translateX(${}px) `,
       left: diff * cellWidth,
     };
@@ -235,7 +235,7 @@ export const getGanttStyleByStart = ({
   }
   return {
     style: {
-      display: 'none',
+      display: "none",
     },
     diff: 0,
   };
@@ -281,9 +281,9 @@ groupingValue
     const barStart = isGroupRow ? group?.startAt : getBarStart(row.original);
     const barEnd = isGroupRow ? group?.endAt : getBarEnd(row.original);
     const height = virtualRow.size - margin * 2 - (isGroupRow ? groupGap : 0);
-    const y = virtualRow.start + margin + (isGroupRow ? groupGap : 0);
+    const y = virtualRow.start + margin + (isGroupRow ? groupGap : 0) + margin;
     const width = (getDayDiff(barEnd, barStart, minBarRange) + 1) * cellWidth;
-    const diff = getDayDiff(barStart ?? barEnd?.add(-1, 'day'), startDate, 0);
+    const diff = getDayDiff(barStart ?? barEnd?.add(-1, "day"), startDate, 0);
 
     nodes.push({
       hidden: !barStart || !barStart,
@@ -308,10 +308,10 @@ groupingValue
       style: {
         height,
         width,
-        cursor: option?.isFixedX ? 'auto' : 'grab',
-        visibility: 'visible',
+        cursor: option?.isFixedX ? "auto" : "grab",
+        visibility: "visible",
       },
-      type: row.groupingColumnId ?? 'gantbar',
+      type: row.groupingColumnId ?? "gantbar",
     });
   });
   return nodes;
@@ -338,4 +338,12 @@ export const getStartAndEnd = <T>(
     startAt,
     endAt,
   };
+};
+
+export const getDateFormX = (
+  offsetX: number,
+  cellWidth: number,
+  startDate: Dayjs
+) => {
+  return startDate.add(Math.ceil(offsetX / cellWidth), "day");
 };

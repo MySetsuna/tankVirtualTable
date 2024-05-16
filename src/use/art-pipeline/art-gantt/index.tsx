@@ -1,34 +1,33 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Gantt, GroupOption } from '@/components/Gantt';
-import React, { Key, useEffect, useRef, useState } from 'react';
-import dayjs, { Dayjs } from 'dayjs';
-import { GanttMode } from '@/components/Gantt/components/VirtualGantt';
+import React, { Key, useEffect, useRef, useState } from "react";
+import dayjs, { Dayjs } from "dayjs";
 import {
   getBarEnd,
   getBarStart,
   getFrontLinkIds,
   getPostLinkIds,
   getRowId,
-} from './lib/utils';
-import { GanttBar } from './gantt-bar';
+} from "./lib/utils";
+import { GanttBar } from "./gantt-bar";
 import {
   IApiArtPip,
   IApiArtStory,
   IApiArtStoryParams,
   IApiArtTask,
   IApiArtTaskParams,
-} from '@/model/pmstation/api-modules/art-task';
-import { apiEditStory, apiEditTask } from '@/api/pmstation/art-task';
-import { messageSuccess } from '@/components/message';
-import { GroupedTable } from '@/components/grouped-table';
+} from "../../art-task";
 import {
   getDefaultColumns,
   getGanttDataSource,
   getGroupOptions,
   getGroupedDataSource,
-} from './lib/common';
-import { Resizable } from 're-resizable';
-import { useGanttExpand } from '../gantt-expand-provider';
+} from "./lib/common";
+import { Resizable } from "re-resizable";
+import { useGanttExpand } from "../gantt-expand-provider";
+import { GanttMode } from "../../../Gantt/components/VirtualGantt";
+import { Gantt, GroupOption } from "../../../Gantt";
+import { GroupedTable } from "../../../grouped-table";
+import { ScrollSync, ScrollSyncNode } from "scroll-sync-react";
 
 interface IProps {
   readonly tasks: IApiArtTask[];
@@ -83,22 +82,6 @@ export const ArtPipGantt = (props: IProps) => {
     const dataObject = Object.fromEntries(formData);
 
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    apiEditTask({
-      ...dataObject,
-      artStoryId: Number(dataObject.artStoryId),
-      projectId: artPip.projectId,
-      artPipId: artPip?.artPipId,
-      startAt: `${dataObject.startAt} 00:00:00`,
-      endAt: `${dataObject.endAt} 00:00:00`,
-      progress: Number(dataObject.progress),
-      effort: Number(dataObject.effort),
-      artCategory: '-1',
-    } as IApiArtTaskParams).then((result) => {
-      if (result?.artTaskId) {
-        messageSuccess(`任务：${dataObject.title} 创建成功`);
-        onListChange?.();
-      }
-    });
   };
 
   const onCreateStory = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -109,15 +92,6 @@ export const ArtPipGantt = (props: IProps) => {
     const dataObject = Object.fromEntries(formData);
 
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const result = await apiEditStory({
-      ...dataObject,
-      projectId: artPip.projectId,
-      artPipId: artPip?.artPipId,
-    } as IApiArtStoryParams);
-    if (result?.artStoryId) {
-      messageSuccess(`需求：${dataObject.title} 创建成功`);
-      onListChange?.();
-    }
   };
 
   const groupedDataSource = getGroupedDataSource(stories, tasks, true, []);
@@ -162,14 +136,14 @@ export const ArtPipGantt = (props: IProps) => {
   }, [grouping, stories]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div>
-        <div style={{ height: 140, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+        <div style={{ height: 140, display: "flex", gap: 5, flexWrap: "wrap" }}>
           <form
             onSubmit={onCreateTask}
             style={{
-              display: 'flex',
-              flexWrap: 'wrap',
+              display: "flex",
+              flexWrap: "wrap",
               gap: 5,
             }}
           >
@@ -225,12 +199,12 @@ export const ArtPipGantt = (props: IProps) => {
             </div>
             <button type="submit">创建任务</button>
           </form>
-          <hr style={{ width: '100%' }} />
+          <hr style={{ width: "100%" }} />
           <form
             onSubmit={onCreateStory}
             style={{
-              display: 'flex',
-              flexWrap: 'wrap',
+              display: "flex",
+              flexWrap: "wrap",
               gap: 5,
             }}
           >
@@ -244,7 +218,7 @@ export const ArtPipGantt = (props: IProps) => {
             </div>
             <button type="submit">创建需求</button>
           </form>
-          <hr style={{ width: '100%' }} />
+          <hr style={{ width: "100%" }} />
         </div>
         <select
           value={ganttMode}
@@ -257,7 +231,7 @@ export const ArtPipGantt = (props: IProps) => {
         </select>
         <input
           type="date"
-          value={selectDate.format('YYYY-MM-DD')}
+          value={selectDate.format("YYYY-MM-DD")}
           onChange={(event) => {
             setSelectDate(dayjs(event.target.value));
           }}
@@ -270,7 +244,7 @@ export const ArtPipGantt = (props: IProps) => {
           Go to Today
         </button>
       </div>
-      <div style={{ flex: 'auto', height: 0 }}>
+      <div style={{ flex: "auto", height: 0 }}>
         <Gantt
           GanttBar={GanttBar}
           data={ganttData}
@@ -289,12 +263,15 @@ export const ArtPipGantt = (props: IProps) => {
           scrollSyncClassName="ant-table-body"
           bufferMonths={[2, 2]}
           bufferDay={40}
+          onBarChange={(startAt, endAt, node) => {
+            console.log(startAt, endAt, node);
+          }}
           style={{
-            position: 'relative',
-            overflow: 'auto',
+            position: "relative",
+            overflow: "auto",
             width: 1200,
             height: 700,
-            flex: 'auto',
+            flex: "auto",
           }}
           table={
             <Resizable defaultSize={{ height: 700, width: 300 }}>
@@ -309,12 +286,12 @@ export const ArtPipGantt = (props: IProps) => {
                 ref={groupedTableRef}
                 dataSource={groupedDataSource}
                 rowSelection={{
-                  columnWidth: 20,
-                  type: 'checkbox',
+                  columnWidth: 30,
+                  type: "checkbox",
                   selectedRowKeys,
                   onChange,
                   getCheckboxProps: (record: any) => ({
-                    disabled: record.name === 'Disabled User', // Column configuration not to be checked
+                    disabled: record.name === "Disabled User", // Column configuration not to be checked
                     name: record.name,
                   }),
                 }}
@@ -331,7 +308,7 @@ export const ArtPipGantt = (props: IProps) => {
                   setExpandKeys(ids);
                   setExpandedModuleIdx(ids);
                 }}
-                rowClassName={'123'}
+                rowClassName={"123"}
                 bordered
                 filters={[]}
                 pagination={false}

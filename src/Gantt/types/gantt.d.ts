@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { Key } from "react";
 
 export type GroupKeyer<T> = {

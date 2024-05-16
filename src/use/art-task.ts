@@ -15,7 +15,7 @@ export interface IApiArtTaskFieldKind {
 
 export interface IApiArtTask {
   readonly artTaskId: number;
-  readonly projectId: string;
+  // readonly projectId: string;
   readonly artPipId: number;
   readonly artStoryId: number;
   readonly title: string;
@@ -23,23 +23,23 @@ export interface IApiArtTask {
   readonly effort: number;
   readonly progress: number;
   readonly status: string;
-  readonly thumbnailUrl: string;
-  readonly handler: string;
+  // readonly thumbnailUrl: string;
+  // readonly handler: string;
   readonly startAt: string;
   readonly endAt: string;
-  readonly priority: string;
-  readonly milestoneId: number;
-  readonly tapdStoryId: string;
-  readonly createdAt: string;
-  readonly updatedAt: string;
+  // readonly priority: string;
+  // readonly milestoneId: number;
+  // readonly tapdStoryId: string;
+  // readonly createdAt: string;
+  // readonly updatedAt: string;
   readonly FromDependIds: number[];
   readonly ToDependIds: number[];
-  readonly customField: {
-    readonly fields: { readonly [key: string]: IApiArtTaskFieldKind };
-  };
+  // readonly customField: {
+  //   readonly fields: { readonly [key: string]: IApiArtTaskFieldKind };
+  // };
 }
 
-export interface IApiArtTaskParams extends Omit<IApiArtTask, 'artTaskId'> {
+export interface IApiArtTaskParams extends Omit<IApiArtTask, "artTaskId"> {
   readonly artTaskId?: number;
 }
 
@@ -52,7 +52,7 @@ export interface IApiArtTaskPage {
 
 export interface IApiArtPip {
   readonly artPipId: number;
-  readonly projectId: string;
+  // readonly projectId: string;
   readonly name: string;
   readonly category: string;
   readonly fatherId: number;
@@ -80,12 +80,12 @@ export interface IApiArtStoryPage {
 
 export interface IApiArtStory {
   readonly artStoryId: number;
-  readonly projectId: string;
+  // readonly projectId: string;
   readonly artPipId: number;
   readonly title: string;
-  readonly tapdStoryId: string;
+  // readonly tapdStoryId: string;
   readonly status: string;
-  readonly finishedCount: number;
-  readonly unfinishedCount: number;
+  // readonly finishedCount: number;
+  // readonly unfinishedCount: number;
   readonly createdAt: string;
 }

@@ -1,23 +1,21 @@
-import { GroupOption } from '@/components/Gantt';
-import { ITableDataItem } from '@/components/grouped-table/model';
-import {
-  IApiArtStory,
-  IApiArtTask,
-} from '@/model/pmstation/api-modules/art-task';
-import { TrademarkCircleOutlined } from '@ant-design/icons';
-import { groupBy } from 'lodash';
-import { FixedType } from 'rc-table/lib/interface';
-import { Key } from 'react';
-import { Row } from '@tanstack/react-table';
-import { Dayjs } from 'dayjs';
-import { getStartAndEnd } from '@/components/Gantt/components/VirtualGantt/utils';
-import { GroupGanttBar } from '../group-gantt-bar';
+import { IApiArtStory, IApiArtTask } from "../../../art-task";
+import { TrademarkCircleOutlined } from "@ant-design/icons";
+import { groupBy } from "lodash";
+import { FixedType } from "rc-table/lib/interface";
+import { Key } from "react";
+import { Row } from "@tanstack/react-table";
+import { Dayjs } from "dayjs";
+import { GroupGanttBar } from "../group-gantt-bar";
+import React from "react";
+import { ITableDataItem } from "../../../../grouped-table/model";
+import { GroupOption } from "../../../../Gantt";
+import { getStartAndEnd } from "../../../../Gantt/components/VirtualGantt/utils";
 
 export const getDefaultColumns = () => {
   return [
     {
-      dataIndex: 'title',
-      key: 'artStoryId',
+      dataIndex: "title",
+      key: "artStoryId",
       title: (
         <>
           <TrademarkCircleOutlined />
@@ -25,19 +23,15 @@ export const getDefaultColumns = () => {
         </>
       ),
       width: 150,
-      fixed: 'left' as FixedType,
+      fixed: "left" as FixedType,
       render: (text: string, row: ITableDataItem) => {
-        return row?.isAdd ? (
-          <a onClick={() => alert('add clicked')}>add</a>
-        ) : (
-          text
-        );
+        return text + "-" + row.artStoryId;
       },
       ellipsis: true,
     },
     {
-      dataIndex: 'startAt',
-      title: '开始时间',
+      dataIndex: "startAt",
+      title: "开始时间",
       width: 100,
       render: (text: string) => {
         return text;
@@ -45,8 +39,8 @@ export const getDefaultColumns = () => {
       ellipsis: true,
     },
     {
-      dataIndex: 'endAt',
-      title: '结束时间',
+      dataIndex: "endAt",
+      title: "结束时间",
       width: 100,
       render: (text: string) => {
         return text;
@@ -56,7 +50,7 @@ export const getDefaultColumns = () => {
   ];
 };
 
-export const ART_STORY_GROUP_ID = 'group__artStoryId';
+export const ART_STORY_GROUP_ID = "group__artStoryId";
 
 export const getGroupOptions = (
   stories: IApiArtStory[],
@@ -76,7 +70,7 @@ export const getGroupOptions = (
         );
         const story = stories.find(
           (story) => story.artStoryId === row.original.artStoryId
-        ) ?? { title: '未分类', artStoryId: 0 };
+        ) ?? { title: "未分类", artStoryId: 0 };
         return {
           id: story.artStoryId,
           data: story,
@@ -118,30 +112,32 @@ export const getGroupedDataSource = (
   defaultExpandKeys?: ReadonlyArray<Key>
 ) => {
   const groupTask = groupBy(tasks, (task) => task.artStoryId);
-  return stories
-    .map((story) => {
-      return {
-        ...story,
-        enableExpand: true,
-        defaultExpand: isDefaultExpandAll
-          ? true
-          : defaultExpandKeys?.includes(story.artStoryId),
-        dataSource: groupTask[story.artStoryId] ?? [],
-      };
-    })
-    .concat([
-      {
-        title: '未分类',
-        artStoryId: 0,
-        createdAt: '2222-12-12',
-        enableExpand: true,
-        defaultExpand: isDefaultExpandAll
-          ? true
-          : defaultExpandKeys?.includes(0),
-        dataSource: groupTask['0'] ?? [],
-      },
-    ] as any[])
-    .sort((a, b) => a.artStoryId - b.artStoryId);
+  return (
+    stories
+      .map((story) => {
+        return {
+          ...story,
+          enableExpand: true,
+          defaultExpand: isDefaultExpandAll
+            ? true
+            : defaultExpandKeys?.includes(story.artStoryId),
+          dataSource: groupTask[story.artStoryId] ?? [],
+        };
+      })
+      // .concat([
+      //   {
+      //     title: "未分类",
+      //     artStoryId: 0,
+      //     createdAt: "2222-12-12",
+      //     enableExpand: true,
+      //     defaultExpand: isDefaultExpandAll
+      //       ? true
+      //       : defaultExpandKeys?.includes(0),
+      //     dataSource: groupTask["0"] ?? [],
+      //   },
+      // ] as any[])
+      .sort((a, b) => a.artStoryId - b.artStoryId)
+  );
 };
 
 export const getGanttDataSource = (

@@ -1,15 +1,16 @@
-import React from 'react';
+import React from "react";
 import {
   Handle,
   NodeResizer,
   Position,
   ResizeDragEvent,
   ResizeParams,
-} from 'reactflow';
-import { GanttBarBoxProps } from '../..';
+} from "reactflow";
+import { GanttBarBoxProps } from "../..";
+import { getDateFormX } from "../VirtualGantt/utils";
 
 export const GanttBarBox = (props: GanttBarBoxProps) => {
-  const { children, ...rest } = props;
+  const { children, onBarChange, startDate, ...rest } = props;
   const { data, setNodes } = rest;
   const { height, minWidth, index } = rest.data;
   const { row } = rest.data;
@@ -23,17 +24,27 @@ export const GanttBarBox = (props: GanttBarBoxProps) => {
 
           const diff = Math.ceil(width / cellWidth);
           const newX = x - (x % cellWidth);
-          return {
+          const newWidth = diff * cellWidth;
+          const changeNode = {
             ...node,
             style: {
               ...node.style,
-              width: diff * cellWidth,
+              width: newWidth,
             },
             position: {
               x: newX,
               y: node.position.y,
             },
           };
+          if (startDate) {
+            const offsetLeft = newX;
+            const offsetRight =
+              offsetLeft + (newWidth ? newWidth - cellWidth : 0);
+            const startAt = getDateFormX(offsetLeft, cellWidth, startDate);
+            const endAt = getDateFormX(offsetRight, cellWidth, startDate);
+            onBarChange?.(startAt, endAt, changeNode);
+          }
+          return changeNode;
         }
         return node;
       });
@@ -48,7 +59,7 @@ export const GanttBarBox = (props: GanttBarBoxProps) => {
         minHeight={height}
         maxHeight={height}
         lineStyle={{
-          backgroundColor: '#00000000',
+          backgroundColor: "#00000000",
           width: 6,
         }}
         onResizeEnd={onResizeEnd}
@@ -63,7 +74,7 @@ export const GanttBarBox = (props: GanttBarBoxProps) => {
               index + row.id + 100
             }, 1)`,
             height,
-            overflow: 'hidden',
+            overflow: "hidden",
           }}
           className="gantt-bar77"
         >

@@ -9,13 +9,14 @@ import {
   getExpandedRowModel,
   getGroupedRowModel,
   useReactTable,
-} from '@tanstack/react-table';
-import { useVirtualizer } from '@tanstack/react-virtual';
+} from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import React, {
   CSSProperties,
   FC,
   Key,
   MutableRefObject,
+  ReactElement,
   ReactNode,
   forwardRef,
   useCallback,
@@ -25,9 +26,9 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import dayjs, { Dayjs } from 'dayjs';
-import weekday from 'dayjs/plugin/weekday';
+} from "react";
+import dayjs, { Dayjs } from "dayjs";
+import weekday from "dayjs/plugin/weekday";
 import {
   GanttHeaderBuilder,
   WEEKDAY_MAP,
@@ -35,15 +36,22 @@ import {
   getDayDiff,
   getNodes,
   getRangeAtByCurrentAt,
-} from './utils';
-import weekOfYear from 'dayjs/plugin/weekOfYear';
-import weekYear from 'dayjs/plugin/weekYear';
-import advancedFormat from 'dayjs/plugin/advancedFormat';
-import 'dayjs/locale/zh-cn';
-import { GanttBarData, GanttNode, GroupOption } from '../..';
-import { NodeProps, NodeTypes, useNodesState, useReactFlow } from 'reactflow';
-import { GanttBarBox } from '../GanttBarBox';
-import GanttFlow from '../GanttFlow';
+} from "./utils";
+import weekOfYear from "dayjs/plugin/weekOfYear";
+import weekYear from "dayjs/plugin/weekYear";
+import advancedFormat from "dayjs/plugin/advancedFormat";
+import "dayjs/locale/zh-cn";
+import {
+  GanttBarData,
+  GanttBarProps,
+  GanttNode,
+  GroupGanttBarProps,
+  GroupOption,
+} from "../..";
+import { NodeProps, NodeTypes, useNodesState, useReactFlow } from "reactflow";
+import { GanttBarBox } from "../GanttBarBox";
+import GanttFlow from "../GanttFlow";
+import { ScrollSync, ScrollSyncNode } from "scroll-sync-react";
 
 dayjs.extend(advancedFormat);
 
@@ -68,7 +76,7 @@ export enum GanttMode {
 }
 
 export enum GanttCustomMode {
-  CustomMode = 'CustomMode',
+  CustomMode = "CustomMode",
 }
 
 export type HeadRender<T> = {
@@ -103,12 +111,13 @@ type VirtualGanttProps<T extends object = any> = {
   // barClassName?: string | ((row: T, index: number) => string);
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
-  GanttBar?: FC<NodeProps<GanttBarData<T>>>;
+  GanttBar?: (props: GanttBarProps<T>) => ReactNode;
   groupGap?: number;
   showYearRow?: boolean;
   headerHeight?: [number] | [number, number] | [number, number, number];
-  table: ReactNode;
+  table: ReactElement;
   scrollSyncClassName: string;
+  onBarChange: (startAt, endAt, node) => void;
 } & (
   | {
       startAt: Dayjs;
@@ -165,6 +174,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
     customHeaderBuilder,
     table: tableNode,
     scrollSyncClassName,
+    onBarChange,
   } = props;
   type TData = (typeof data)[0];
 
@@ -209,6 +219,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
               {...props}
               setNodes={setNodes}
               onNodesChange={onNodesChange}
+              onBarChange={onBarChange}
+              startDate={startDate}
             />
           ),
         };
@@ -219,6 +231,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
             {...props}
             setNodes={setNodes}
             onNodesChange={onNodesChange}
+            onBarChange={onBarChange}
+            startDate={startDate}
           >
             {GanttBar}
           </GanttBarBox>
@@ -260,7 +274,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
       setOriginStart(startAt);
       setEndDate(endAt);
       if (parentRef.current && isInfiniteX) {
-        const startOffset = currentDate.diff(startAt, 'day');
+        const startOffset = currentDate.diff(startAt, "day");
         scrollCallback.current = () =>
           parentRef.current?.scrollTo({
             left: (startOffset > 3 ? startOffset - 3 : startOffset) * cellWidth,
@@ -315,7 +329,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
     getScrollElement: () => parentRef.current,
     estimateSize: (index) => {
       const row = rows[index];
-      return row.getIsGrouped() ? rowHeight + groupGap : rowHeight;
+      return row.groupingColumnId ? rowHeight + groupGap : rowHeight;
     },
     overscan,
   });
@@ -402,8 +416,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
           scrollCallback.current = null;
         };
         setViewportX((pre) => pre + bufferDay * cellWidth);
-        setEndDate((date) => date?.add(-bufferDay, 'day'));
-        setStartDate((date) => date?.add(-bufferDay, 'day'));
+        setEndDate((date) => date?.add(-bufferDay, "day"));
+        setStartDate((date) => date?.add(-bufferDay, "day"));
         return;
       }
       if (toRight) {
@@ -414,8 +428,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
           scrollCallback.current = null;
         };
         setViewportX((pre) => pre - bufferDay * cellWidth);
-        setStartDate((date) => date?.add(bufferDay, 'day'));
-        setEndDate((date) => date?.add(bufferDay, 'day'));
+        setStartDate((date) => date?.add(bufferDay, "day"));
+        setEndDate((date) => date?.add(bufferDay, "day"));
         return;
       }
     }
@@ -439,7 +453,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
   const bodyVisibleHeight =
     (parentRef.current?.clientHeight ?? 0) - headerHeight;
 
-  const ganttBodyHeight = rowVirtualizer.getTotalSize() - 7;
+  const ganttBodyHeight = rowVirtualizer.getTotalSize();
   const scrollHeight = ganttBodyHeight + headerHeight;
   const scrollWidth = table
     .getHeaderGroups()[0]
@@ -447,12 +461,12 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
     .reduce((total, cur) => total + cur.getSize(), 0);
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
+    <div style={{ display: "flex", height: "100%" }}>
       {tableNode}
       <div
         ref={parentRef}
-        className={['gantt-container', 'container', scrollSyncClassName].join(
-          ' '
+        className={["gantt-container", "container", scrollSyncClassName].join(
+          " "
         )}
         style={style}
         onScroll={handleScroll}
@@ -460,21 +474,18 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
         <div
           className="gantt-scroll-container"
           style={{
-            height:
-              scrollHeight > (parentRef.current?.clientHeight ?? 0)
-                ? '100%'
-                : scrollHeight,
+            height: scrollHeight,
             width: scrollWidth,
           }}
         >
           <div
             className="gantt-header"
             style={{
-              display: 'flex',
-              position: 'sticky',
+              display: "flex",
+              position: "sticky",
               top: 0,
               zIndex: 3,
-              flexDirection: 'column',
+              flexDirection: "column",
               // overflow: "hidden",
             }}
           >
@@ -485,7 +496,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                 <div
                   key={headerGroup.id}
                   // style={{ display: "flex", overflow: "hidden" }}
-                  style={{ display: 'flex' }}
+                  style={{ display: "flex" }}
                 >
                   {headerGroup.headers
                     .filter((header) => !grouping.includes(header.column.id))
@@ -497,16 +508,16 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                           key={header.id}
                           // colSpan={header.colSpan}
                           style={{
-                            background: 'black',
-                            color: 'white',
-                            fontWeight: 'bolder',
+                            background: "black",
+                            color: "white",
+                            fontWeight: "bolder",
                             width: header.getSize(),
                             height,
                             flexShrink: 0,
-                            borderRight: '1px white solid',
+                            borderRight: "1px white solid",
                             borderBottom: !isLeafHeader
-                              ? '1px white solid'
-                              : 'unset',
+                              ? "1px white solid"
+                              : "unset",
                             zIndex: index,
                           }}
                         >
@@ -515,22 +526,22 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                               style={
                                 !isLeafHeader
                                   ? {
-                                      position: 'sticky',
+                                      position: "sticky",
                                       left: 0,
                                       width: 0,
-                                      whiteSpace: 'nowrap',
+                                      whiteSpace: "nowrap",
                                       height,
 
-                                      overflow: 'visible',
+                                      overflow: "visible",
                                     }
                                   : { height }
                               }
                             >
                               <div
                                 style={{
-                                  position: 'absolute',
-                                  overflow: 'hidden',
-                                  padding: '0 5px',
+                                  position: "absolute",
+                                  overflow: "hidden",
+                                  padding: "0 5px",
                                   width: header.getSize(),
                                 }}
                               >
@@ -551,13 +562,13 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
           <div
             className="gantt-flow"
             style={{
-              position: 'absolute',
-              display: 'flex',
+              position: "absolute",
+              display: "flex",
               top: headerHeight,
               width: scrollWidth,
               height: Math.max(ganttBodyHeight, bodyVisibleHeight),
               zIndex: 2,
-              backgroundColor: 'white',
+              backgroundColor: "white",
               // pointerEvents: "none",
             }}
           >
@@ -566,18 +577,20 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
               setNodes={setNodes}
               cellWidth={cellWidth}
               nodeTypes={nodeTypes}
+              startDate={startDate}
+              onBarChange={onBarChange}
             >
               <div
                 className="gantt-background"
                 style={{
-                  position: 'absolute',
-                  display: 'flex',
+                  position: "absolute",
+                  display: "flex",
                   // top: headerHeight,
                   width: scrollWidth,
                   height: Math.max(ganttBodyHeight, bodyVisibleHeight),
                   // height: 0,
                   zIndex: 3,
-                  backgroundColor: 'white',
+                  backgroundColor: "white",
                   // pointerEvents: "none",
                 }}
               >
@@ -585,45 +598,45 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                   .filter((header) => !grouping.includes(header.column.id))
                   .map((header) => {
                     const date = dayjs(header.id);
-                    const dayNumber = date.get('day');
+                    const dayNumber = date.get("day");
                     const isWeekend = dayNumber === 0 || dayNumber === 6;
                     const isRest = isHoliday?.(date) || isWeekend;
 
                     const isCurrentDate =
-                      currentAt?.format('YYYY-MM-DD') ===
-                      date.format('YYYY-MM-DD');
+                      currentAt?.format("YYYY-MM-DD") ===
+                      date.format("YYYY-MM-DD");
 
                     return (
                       <div
                         key={header.id}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'center',
+                          display: "flex",
+                          justifyContent: "center",
                           width: header.getSize(),
-                          height: '100%',
+                          height: "100%",
                           // backgroundColor: "red",
-                          borderRight: '1px solid black',
+                          borderRight: "1px solid black",
                           // pointerEvents: "none",
-                          backgroundColor: isRest ? '#acacac60' : 'white',
+                          backgroundColor: isRest ? "#acacac60" : "white",
                           // zIndex: isCurrentDate ?  : -1,
                           zIndex: -1,
-                          position: 'relative',
+                          position: "relative",
                         }}
                       >
                         {isCurrentDate && (
                           <>
                             <div
                               style={{
-                                height: '100%',
+                                height: "100%",
                                 width: 5,
-                                backgroundColor: 'green',
+                                backgroundColor: "green",
                               }}
                             ></div>
                             <div
                               style={{
-                                color: 'green',
-                                position: 'absolute',
-                                left: '100%',
+                                color: "green",
+                                position: "absolute",
+                                left: "100%",
                               }}
                             >
                               this is CurrentDate
@@ -657,16 +670,16 @@ const defaultProps: Partial<VirtualGanttProps> = {
   headRender: {
     date: (date) => {
       return () => {
-        const day = date.get('day');
-        const dateStr = date.format('D');
+        const day = date.get("day");
+        const dateStr = date.format("D");
         return (
           <div
-            title={date.format('YYYY-MM-DD w')}
+            title={date.format("YYYY-MM-DD w")}
             style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              whiteSpace: 'nowrap',
-              padding: '0 5px',
+              display: "flex",
+              justifyContent: "space-between",
+              whiteSpace: "nowrap",
+              padding: "0 5px",
             }}
           >
             <span>{dateStr}</span>
@@ -677,20 +690,20 @@ const defaultProps: Partial<VirtualGanttProps> = {
     },
     month: (date) => {
       return () => {
-        return date.format('YYYY年M月');
+        return date.format("YYYY年M月");
       };
     },
     week: (date, timezone) => {
       return () => {
-        const end = date.add(6, 'day');
+        const end = date.add(6, "day");
         const format =
-          end.get('year') !== date.get('year') ? 'YYYY-MM-DD' : 'MM-DD';
+          end.get("year") !== date.get("year") ? "YYYY-MM-DD" : "MM-DD";
 
         return (
           `${date.locale(timezone).weekYear()}年` +
-          ' ' +
+          " " +
           `${date.locale(timezone).week()}周 ` +
-          `${date.format(format)}~${date.add(6, 'day').format(format)}`
+          `${date.format(format)}~${date.add(6, "day").format(format)}`
         );
       };
     },
