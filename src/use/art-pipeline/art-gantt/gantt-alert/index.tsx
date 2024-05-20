@@ -34,9 +34,7 @@ export const GanttAlert = (props: GanttAlertPropps<IApiArtTask, AlertMap>) => {
   if (GanttAlertType.Normal === type) {
     return null;
   }
-  if (GanttAlertType.UnAvailable === type) {
-    return;
-  }
+ 
   return (
     <>
       <Tooltip
@@ -48,7 +46,10 @@ export const GanttAlert = (props: GanttAlertPropps<IApiArtTask, AlertMap>) => {
       >
         <div
           style={{ width: '100%', height: '100%' }}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            alertMap[date.format('YYYY-MM-DD')];
+            setOpen(true);
+          }}
         ></div>
       </Tooltip>
       {GanttAlertType.Available === type && (

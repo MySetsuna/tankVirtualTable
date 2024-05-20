@@ -223,6 +223,7 @@ export const getAlertOptions = (
         current.startOf('date').valueOf() <= end.startOf('date').valueOf();
         current = current.add(1, 'day')
       ) {
+        const conflictSet = new Set<number>();
         const dateAlertMap: DayAlertMap = {
           user: { ...defaultUserAlertMap },
           conflictIds: [],
@@ -232,8 +233,10 @@ export const getAlertOptions = (
           return isDateBetween(current, getBarStart(task), getBarEnd(task));
         });
         const usersSet = new Set<string>();
+        let preTaskIdMap = {};
         currentMatchedTasks.forEach((task) => {
           const handler = task.handler;
+
           if (
             !Reflect.has(dateAlertMap.user, handler) ||
             dateAlertMap.user[handler] === GanttAlertType.Available
@@ -251,15 +254,20 @@ export const getAlertOptions = (
                 }
               } else {
                 dateAlertMap.type = GanttAlertType.UnAvailable;
+                conflictSet.add(task.artTaskId);
+                conflictSet.add(preTaskIdMap[handler]);
               }
             } else {
             }
           } else {
             dateAlertMap.user[handler] = GanttAlertType.UnAvailable;
             dateAlertMap.type = GanttAlertType.UnAvailable;
-            dateAlertMap.conflictIds.push(task.artTaskId);
+            conflictSet.add(task.artTaskId);
+            conflictSet.add(preTaskIdMap[handler]);
           }
+          preTaskIdMap[handler] = task.artTaskId;
         });
+        dateAlertMap.conflictIds = Array.from(conflictSet.values());
         alertMap[current.format('YYYY-MM-DD')] = dateAlertMap;
       }
 
