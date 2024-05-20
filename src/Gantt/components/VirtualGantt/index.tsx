@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   ColumnDef,
   ColumnDefTemplate,
@@ -13,17 +12,13 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React, {
   CSSProperties,
-  FC,
   HTMLAttributes,
   Key,
-  MutableRefObject,
   ReactElement,
   ReactNode,
-  forwardRef,
   memo,
   useCallback,
   useEffect,
-  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -45,29 +40,18 @@ import weekOfYear from 'dayjs/plugin/weekOfYear';
 import weekYear from 'dayjs/plugin/weekYear';
 import advancedFormat from 'dayjs/plugin/advancedFormat';
 import 'dayjs/locale/zh-cn';
-import {
-  GanttBarData,
-  GanttBarProps,
-  GanttNode,
-  GroupGanttBarProps,
-  GroupOption,
-} from '../..';
+import { GanttBarProps, GanttNode, GroupOption } from '../..';
 import {
   Connection,
-  NodeChange,
-  NodeProps,
   NodeTypes,
-  applyNodeChanges,
   useEdgesState,
   useNodesState,
   useReactFlow,
 } from 'reactflow';
 import { GanttBarBox } from '../GanttBarBox';
 import GanttFlow from '../GanttFlow';
-import { isEmpty, isEqual, uniqBy } from 'lodash';
+import { isEmpty, isEqual } from 'lodash';
 import ScrollMirror from 'scrollmirror';
-import { EnumType, TupleType } from 'typescript';
-import { current } from '@reduxjs/toolkit';
 
 dayjs.extend(advancedFormat);
 
@@ -116,18 +100,24 @@ export enum BaseGanttAlertType {
   conflict = 'conflict',
 }
 
-export interface GanttAlertOption<T = any> {
-  [key: string]:
-    | undefined
-    | ({
-        component?: (props: {
-          type: string;
-          date: Dayjs;
-          rows: Row<T>[];
-          data: any;
-        }) => ReactNode;
-        modeLastDayBorder?: CSSProperties['border'];
-      } & HTMLAttributes<HTMLDivElement>);
+export type GanttAlertPropps<T = any, AM = unknown> = {
+  type: string;
+  date: Dayjs;
+  rows: Row<T>[];
+  alertMap: AM;
+  params: string[];
+};
+
+export interface GanttAlertOptions<T = any, AM = any, TY = any, P = any> {
+  component?: (props: GanttAlertPropps<T, AM>) => ReactNode;
+  elementProps?: HTMLAttributes<HTMLDivElement>;
+  modeLastDayBorder?: CSSProperties['border'];
+  getAlertMap: (start: Dayjs, end: Dayjs, rows: Row<T>[], params: P) => AM;
+  getAlertType: (date: Dayjs, rows: Row<T>[], data: AM) => TY;
+  params?: P;
+  typeElemetPropsMap: {
+    [type: string]: HTMLAttributes<HTMLDivElement>;
+  };
 }
 
 export type VirtualGanttProps<T extends object = any> = {
@@ -159,6 +149,7 @@ export type VirtualGanttProps<T extends object = any> = {
   headerHeight?: HeaderHeightOps;
   alertHeight?: number;
   table: ReactElement;
+  scrollSyncElement?: Element[] | NodeListOf<Element>;
   scrollSyncElementQuery?: string;
   scrollSyncClassName: string;
   onBarChange?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<T>) => void;
@@ -169,16 +160,7 @@ export type VirtualGanttProps<T extends object = any> = {
     to: GanttNode<any>;
   }) => ReactNode;
   getCustomModeLastDay?: (date: Dayjs, isWeekStartMonday?: boolean) => boolean;
-  alertOptionMap: GanttAlertOption<T>;
-  alertType: {
-    fn: (
-      date: Dayjs,
-      rows: Row<T>[],
-      params: any
-    ) => { type: string; data: any };
-    params: any;
-  };
-  showAlert?: boolean;
+
   defaultAlertStyle?: CSSProperties;
   defaultAlertClassName?: string;
   hasLastGroupGap?: boolean;
@@ -204,6 +186,16 @@ export type VirtualGanttProps<T extends object = any> = {
     | {
         mode: GanttCustomMode;
         customHeaderBuilder: GanttHeaderBuilder;
+      }
+  ) &
+  (
+    | {
+        alertOptions: GanttAlertOptions<T>;
+        showAlert: true;
+      }
+    | {
+        alertOptions?: GanttAlertOptions<T>;
+        showAlert?: false;
       }
   );
 const VirtualGanttComponent = (props: VirtualGanttProps) => {
@@ -241,6 +233,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     table: tableNode,
     scrollSyncClassName,
     scrollSyncElementQuery,
+    scrollSyncElement,
     onBarChange,
     onDisConnect,
     onConnect,
@@ -249,10 +242,9 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     renderEdgeDeleteTitle,
     getCustomModeLastDay,
     showAlert,
-    alertOptionMap,
+    alertOptions,
     defaultAlertStyle,
     defaultAlertClassName,
-    alertType: getAlertType,
   } = props;
   type TData = (typeof data)[0];
 
@@ -363,9 +355,10 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
 
   React.useEffect(() => {
     new ScrollMirror(
-      document.querySelectorAll(
-        scrollSyncElementQuery ?? `.${scrollSyncClassName}`
-      ),
+      scrollSyncElement ??
+        document.querySelectorAll(
+          scrollSyncElementQuery ?? `.${scrollSyncClassName}`
+        ),
       {
         horizontal: false,
         proportional: true,
@@ -444,15 +437,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     }
   }, [table, isGroupView, grouping]);
 
-  useEffect(() => {
-    console.log(table.getState().expanded, 'table expanded');
-  }, [table.getState().expanded]);
-
   const { rows } = table.getRowModel();
-  // const grouingRows = useMemo(()=>{
-  //   const groupingRows = [];
-  //   rows
-  // },[isGroupView,expandKeys,rows])
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -463,6 +448,18 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     },
     overscan,
   });
+
+  const alertMap = useMemo(() => {
+    if (startDate && endDate && showAlert) {
+      return alertOptions.getAlertMap(
+        startDate,
+        endDate,
+        rows,
+        alertOptions.params
+      );
+    }
+    return {};
+  }, [startDate, endDate, alertOptions, rows, showAlert]);
 
   useEffect(() => {
     const edges = getEdges(
@@ -528,7 +525,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     getRowId,
   ]);
 
-  // 是否使用同步effect？使用useEffect会使内容闪烁
   useLayoutEffect(() => {
     if (startDate && endDate) {
       let columns: ColumnDef<any>[] = [];
@@ -569,8 +565,9 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     if (!scrollCallback.current && isInfiniteX && parentRef.current) {
       const toLeft = parentRef.current?.scrollLeft === 0;
       const toRight =
-        parentRef.current?.scrollLeft + parentRef.current?.clientWidth ===
-        parentRef.current?.scrollWidth;
+        Math.floor(
+          parentRef.current?.scrollLeft + parentRef.current?.clientWidth
+        ) === parentRef.current?.scrollWidth;
 
       if (toLeft) {
         scrollCallback.current = () => {
@@ -669,7 +666,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               top: 0,
               zIndex: 3,
               flexDirection: 'column',
-              // overflow: "hidden",
+              // overflow: 'hidden',
             }}
           >
             {visibleHeaderGroups.map((headerGroup, index) => {
@@ -678,7 +675,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               return (
                 <div
                   key={headerGroup.id}
-                  // style={{ display: "flex", overflow: "hidden" }}
+                  // style={{ display: 'flex', overflow: 'hidden' }}
                   style={{ display: 'flex' }}
                 >
                   {headerGroup.headers
@@ -770,29 +767,33 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                       bodyVisibleHeight
                     );
 
-                    const { type, data } =
-                      getAlertType.fn(date, rows, getAlertType.params) ?? {};
-
-                    const alertOption = alertOptionMap[type];
+                    const type = alertOptions?.getAlertType(
+                      date,
+                      rows,
+                      alertMap
+                    );
 
                     const {
                       modeLastDayBorder,
                       component: AlertComponent,
-                      ...rest
-                    } = alertOption ?? {};
-
+                      elementProps,
+                      typeElemetPropsMap,
+                      params,
+                    } = alertOptions;
+                    const typeElemetProps = typeElemetPropsMap[type];
                     return (
                       <div
                         className={defaultAlertClassName}
                         key={header.id}
-                        {...rest}
+                        {...elementProps}
+                        {...typeElemetProps}
                         style={{
                           display: 'flex',
                           justifyContent: 'center',
                           width: header.getSize(),
                           height: '100%',
-                          // backgroundColor: "red",
-                          // pointerEvents: "none",
+                          // backgroundColor: 'red',
+                          // pointerEvents: 'none',
                           // backgroundColor: 'red',
                           // zIndex: isCurrentDate ?  : -1,
                           zIndex: 888,
@@ -802,7 +803,8 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                           borderRight: isModeLastDay
                             ? modeLastDayBorder ?? '1px solid black'
                             : 'unset',
-                          ...rest.style,
+                          ...elementProps?.style,
+                          ...typeElemetProps?.style,
                         }}
                       >
                         {AlertComponent && (
@@ -810,7 +812,8 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                             type={type}
                             date={date}
                             rows={rows}
-                            data={data}
+                            alertMap={alertMap}
+                            params={params}
                           />
                         )}
                         {isCurrentDate && (
@@ -877,7 +880,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               height: Math.max(ganttBodyHeight, bodyVisibleHeight),
               zIndex: 2,
               backgroundColor: 'white',
-              // pointerEvents: "none",
+              // pointerEvents: 'none',
             }}
           >
             <GanttFlow
@@ -905,7 +908,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                   // height: 0,
                   zIndex: 3,
                   backgroundColor: 'white',
-                  // pointerEvents: "none",
+                  // pointerEvents: 'none',
                 }}
               >
                 {leafHeaderGroup?.headers
@@ -928,9 +931,9 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                           justifyContent: 'center',
                           width: header.getSize(),
                           height: '100%',
-                          // backgroundColor: "red",
+                          // backgroundColor: 'red',
                           borderRight: '1px solid black',
-                          // pointerEvents: "none",
+                          // pointerEvents: 'none',
                           backgroundColor: isRest ? '#acacac60' : 'white',
                           // zIndex: isCurrentDate ?  : -1,
                           zIndex: -1,

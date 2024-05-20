@@ -1,6 +1,6 @@
-/// <reference types="vite/client" />
+/// <reference types='vite/client' />
 
-import { Key } from "react";
+import { Key } from 'react';
 
 export type GroupKeyer<T> = {
   key: ((data: T) => Key) | keyof T;

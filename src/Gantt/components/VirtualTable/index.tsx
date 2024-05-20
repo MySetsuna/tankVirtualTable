@@ -7,10 +7,10 @@ import {
   getGroupedRowModel,
   getSortedRowModel,
   useReactTable,
-} from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import React, { CSSProperties, ReactNode, useEffect, useMemo } from "react";
-import { GroupOption } from "../..";
+} from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import React, { CSSProperties, ReactNode, useEffect, useMemo } from 'react';
+import { GroupOption } from '../..';
 
 type AnyObject = {
   [key: string]: any;
@@ -130,28 +130,28 @@ export const VirtualTable = (props: VirtualTableProps) => {
   return (
     <div
       ref={parentRef}
-      className={["gantt-container", "container", "gantt-table"].join(" ")}
+      className={['gantt-container', 'container', 'gantt-table'].join(' ')}
       style={style}
     >
       <div
-        className="gantt-scroll-container"
+        className='gantt-scroll-container'
         style={{
           height: scrollHeight,
           width: scrollWidth,
         }}
       >
         <div
-          className="table-header"
+          className='table-header'
           style={{
-            display: "flex",
-            position: "sticky",
+            display: 'flex',
+            position: 'sticky',
             top: 0,
             zIndex: 1,
-            flexDirection: "column",
+            flexDirection: 'column',
           }}
         >
           {table.getHeaderGroups().map((headerGroup) => (
-            <div key={headerGroup.id} style={{ display: "flex" }}>
+            <div key={headerGroup.id} style={{ display: 'flex' }}>
               {headerGroup.headers
                 .filter((header) => !grouping.includes(header.column.id))
                 .map((header) => {
@@ -162,18 +162,18 @@ export const VirtualTable = (props: VirtualTableProps) => {
                       style={{
                         width: header.getSize(),
                         height: 60,
-                        background: "black",
-                        color: "white",
-                        fontWeight: "bolder",
-                        overflow: "hidden",
+                        background: 'black',
+                        color: 'white',
+                        fontWeight: 'bolder',
+                        overflow: 'hidden',
                       }}
                     >
                       {header.isPlaceholder ? null : (
                         <div
                           {...{
                             className: header.column.getCanSort()
-                              ? "cursor-pointer select-none"
-                              : "",
+                              ? 'cursor-pointer select-none'
+                              : '',
                             onClick: header.column.getToggleSortingHandler(),
                           }}
                         >
@@ -182,8 +182,8 @@ export const VirtualTable = (props: VirtualTableProps) => {
                             header.getContext()
                           )}
                           {{
-                            asc: " 🔼",
-                            desc: " 🔽",
+                            asc: ' 🔼',
+                            desc: ' 🔽',
                           }[header.column.getIsSorted() as string] ?? null}
                         </div>
                       )}
@@ -194,16 +194,16 @@ export const VirtualTable = (props: VirtualTableProps) => {
           ))}
         </div>
         <div
-          className="table-body"
+          className='table-body'
           style={{
-            position: "absolute",
-            display: "flex",
-            flexDirection: "column",
+            position: 'absolute',
+            display: 'flex',
+            flexDirection: 'column',
             top: headerHeight,
             width: scrollWidth,
             height: Math.max(ganttBodyHeight, bodyVisibleHeight),
             zIndex: 0,
-            backgroundColor: "white",
+            backgroundColor: 'white',
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
@@ -213,16 +213,16 @@ export const VirtualTable = (props: VirtualTableProps) => {
               <div
                 key={row.id}
                 style={{
-                  display: "flex",
+                  display: 'flex',
                   height: `${virtualRow.size}px`,
-                  width: "100%",
+                  width: '100%',
                   // transform: `translateY(${virtualRow.start}px)`,
-                  borderTop: isGroupRow ? "1px solid black" : "",
-                  borderBottom: "1px solid black",
+                  borderTop: isGroupRow ? '1px solid black' : '',
+                  borderBottom: '1px solid black',
                   transform: `translateY(${
                     virtualRow.start - index * virtualRow.size
                   }px)`,
-                  marginTop: isGroupRow ? groupGap : "unset",
+                  marginTop: isGroupRow ? groupGap : 'unset',
                 }}
               >
                 {columnVirtualizer.getVirtualItems().map((virtualColumn) => {
@@ -234,16 +234,16 @@ export const VirtualTable = (props: VirtualTableProps) => {
                   let content;
                   let width = cell.column.columnDef.size ?? virtualColumn.size;
                   let style: React.CSSProperties = {
-                    position: "absolute",
+                    position: 'absolute',
                     // top: 0,
                     // left: 0,
                     width: `${width}px`,
                     height: `${virtualRow.size}px`,
                     transform: `translateX(${virtualColumn.start}px) `,
                     flexShrink: 0,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   };
                   if (cellValue?.toString) {
                     content = cellValue.toString();

@@ -1,6 +1,6 @@
-import { faker } from "@faker-js/faker";
-import dayjs from "dayjs";
-import { IApiArtPip, IApiArtStory, IApiArtTask } from "./use/art-task";
+import { faker } from '@faker-js/faker';
+import dayjs from 'dayjs';
+import { IApiArtPip, IApiArtStory, IApiArtTask } from './use/art-task';
 
 const range = (len: number) => {
   const arr: number[] = [];
@@ -17,23 +17,34 @@ const newTask = (index: number, len): IApiArtTask => {
     title: faker.word.verb(),
     artStoryId: faker.datatype.number(19),
     artPipId: faker.datatype.number(50),
-    artCategory: faker.helpers.shuffle<IApiArtTask["artCategory"]>([
-      "分类1",
-      "分类2",
-      "分类3",
+    handler: faker.helpers.arrayElements<IApiArtTask['handler']>([
+      '用户1',
+      '用户2',
+      '用户3',
+      '用户4',
+      '用户5',
+      '用户6',
+      '用户7',
+      '用户8',
+      '用户9',
+    ])[0]!,
+    artCategory: faker.helpers.shuffle<IApiArtTask['artCategory']>([
+      '分类1',
+      '分类2',
+      '分类3',
     ])[0]!,
     progress: faker.datatype.number(100),
     effort: faker.datatype.number(10000),
     startAt: faker.datatype
       .datetime({
-        max: today.add(10, "day").valueOf(),
-        min: today.add(0, "day").valueOf(),
+        max: today.add(1, 'day').valueOf(),
+        min: today.add(-3, 'day').valueOf(),
       })
       .toLocaleDateString(),
     endAt: faker.datatype
       .datetime({
-        max: today.add(20, "day").valueOf(),
-        min: today.add(11, "day").valueOf(),
+        max: today.add(4, 'day').valueOf(),
+        min: today.add(2, 'day').valueOf(),
       })
       .toLocaleDateString(),
     FromDependIds: Array(faker.datatype.number(10))
@@ -42,10 +53,10 @@ const newTask = (index: number, len): IApiArtTask => {
     ToDependIds: Array(faker.datatype.number(10))
       .fill(0)
       .map(() => faker.datatype.number(len)),
-    status: faker.helpers.shuffle<IApiArtTask["status"]>([
-      "done",
-      "working",
-      "new",
+    status: faker.helpers.shuffle<IApiArtTask['status']>([
+      'done',
+      'working',
+      'new',
     ])[0]!,
   };
 };
@@ -56,15 +67,15 @@ const newStory = (index: number, len): IApiArtStory => {
     artStoryId: index,
     title: faker.word.verb(),
     artPipId: faker.datatype.number(5),
-    status: faker.helpers.shuffle<IApiArtStory["status"]>([
-      "done",
-      "working",
-      "new",
+    status: faker.helpers.shuffle<IApiArtStory['status']>([
+      'done',
+      'working',
+      'new',
     ])[0]!,
     createdAt: faker.datatype
       .datetime({
-        max: today.add(20, "day").valueOf(),
-        min: today.add(11, "day").valueOf(),
+        max: today.add(20, 'day').valueOf(),
+        min: today.add(11, 'day').valueOf(),
       })
       .toDateString(),
   };
@@ -75,11 +86,11 @@ const newArtPip = (index: number, len): IApiArtPip => {
   return {
     artPipId: index,
     name: faker.word.verb(),
-    category: faker.helpers.shuffle<IApiArtPip["category"]>([
-      "分类1",
-      "分类2",
-      "分类3",
-      "分类4",
+    category: faker.helpers.shuffle<IApiArtPip['category']>([
+      '分类1',
+      '分类2',
+      '分类3',
+      '分类4',
     ])[0]!,
     count: faker.datatype.number(50),
     fatherId: faker.datatype.number(len),

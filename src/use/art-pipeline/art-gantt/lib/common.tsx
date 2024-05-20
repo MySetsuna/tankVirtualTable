@@ -1,17 +1,18 @@
-import { IApiArtStory, IApiArtTask } from "../../../art-task";
-import { TrademarkCircleOutlined } from "@ant-design/icons";
-import { groupBy } from "lodash";
-import { FixedType } from "rc-table/lib/interface";
-import { Key } from "react";
-import { Row } from "@tanstack/react-table";
-import { Dayjs } from "dayjs";
-import { GroupGanttBar } from "../group-gantt-bar";
-import React from "react";
-import { ITableDataItem } from "../../../../grouped-table/model";
-import { GroupOption } from "../../../../Gantt";
-import { getStartAndEnd } from "../../../../Gantt/utils";
-import { GanttAlertOption } from "../../../../Gantt/components/VirtualGantt";
-import { getBarEnd, getBarStart } from "../../../use-lib";
+import { IApiArtStory, IApiArtTask } from '../../../art-task';
+import { TrademarkCircleOutlined } from '@ant-design/icons';
+import { groupBy } from 'lodash';
+import { FixedType } from 'rc-table/lib/interface';
+import { Key } from 'react';
+import { Row } from '@tanstack/react-table';
+import dayjs, { Dayjs } from 'dayjs';
+import { GroupGanttBar } from '../group-gantt-bar';
+import React from 'react';
+import { ITableDataItem } from '../../../../grouped-table/model';
+import { GroupOption } from '../../../../Gantt';
+import { getStartAndEnd } from '../../../../Gantt/utils';
+import { GanttAlertOptions } from '../../../../Gantt/components/VirtualGantt';
+import { getBarEnd, getBarStart } from '../../../use-lib';
+import { GanttAlert } from '../gantt-alert';
 
 export enum StoryStatus {
   Finish = 'Finish',
@@ -21,6 +22,7 @@ export enum StoryStatus {
 export enum GanttAlertType {
   Available = 'Available',
   UnAvailable = 'UnAvailable',
+  Normal = 'Normal',
 }
 
 export const getDefaultColumns = () => {
@@ -175,20 +177,6 @@ export const getGanttDataSource = (
     .sort((a, b) => a.artStoryId - b.artStoryId);
 };
 
-export const GANTT_ALERT_OPTION: GanttAlertOption<IApiArtTask> = {
-  [GanttAlertType.Available]: {
-    style: { background: '#4ABE79' },
-    // component: AvailableGanttAlert,
-    modeLastDayBorder: '#CDD6E4 solid 1px',
-  },
-  [GanttAlertType.UnAvailable]: {
-    style: {
-      background: '#F25757',
-    },
-    // component: ConflictGanttAlert,
-    modeLastDayBorder: '#CDD6E4 solid 1px',
-  },
-};
 export const isDateBetween = (
   date: Dayjs,
   start?: Dayjs,
@@ -204,20 +192,160 @@ export const isDateBetween = (
   );
 };
 
-export const getAlertType = (users: string[]) => {
-  return {
-    fn: (
-      date: Dayjs,
-      rows: Row<IApiArtTask>[],
-      users: string[]
-    ) => {
-      const availableUserSet = new Set(users);
-      const matchedTasks = rows.filter(({ original }) => {
-        return isDateBetween(date, getBarStart(original), getBarEnd(original));
-      });
-      // const;
-      return { type: GanttAlertType.Available as string, data: {} };
-    },
-    params: users,
+type DayAlertMap = {
+  user: {
+    [user: string]: GanttAlertType;
   };
+  conflictIds: IApiArtTask['artTaskId'][];
+  type: GanttAlertType;
+};
+
+export type AlertMap = {
+  [date: string]: DayAlertMap;
+};
+
+export const getAlertOptions = (
+  users: string[],
+  tasks: IApiArtTask[]
+): GanttAlertOptions<IApiArtTask, AlertMap, GanttAlertType, string[]> => {
+  return {
+    getAlertMap: (
+      start: Dayjs,
+      end: Dayjs,
+      _rows: Row<IApiArtTask>[]
+    ): AlertMap => {
+      const alertMap: AlertMap = {};
+      const defaultUserAlertMap = users.reduce((map, user) => {
+        return Object.assign(map, { [user]: GanttAlertType.Available });
+      }, {});
+      for (
+        let current = start;
+        current.startOf('date').valueOf() <= end.startOf('date').valueOf();
+        current = current.add(1, 'day')
+      ) {
+        const dateAlertMap: DayAlertMap = {
+          user: { ...defaultUserAlertMap },
+          conflictIds: [],
+          type: GanttAlertType.Available,
+        };
+        const currentMatchedTasks = tasks.filter((task) => {
+          return isDateBetween(current, getBarStart(task), getBarEnd(task));
+        });
+        const usersSet = new Set<string>();
+        currentMatchedTasks.forEach((task) => {
+          const handler = task.handler;
+          if (
+            !Reflect.has(dateAlertMap.user, handler) ||
+            dateAlertMap.user[handler] === GanttAlertType.Available
+          ) {
+            dateAlertMap.user[handler] = GanttAlertType.Normal;
+            if (
+              users.includes(handler)
+              // &&
+              // dateAlertMap.type !== GanttAlertType.UnAvailable
+            ) {
+              if (!usersSet.has(handler)) {
+                usersSet.add(handler);
+                if (usersSet.size === users.length) {
+                  dateAlertMap.type = GanttAlertType.Normal;
+                }
+              } else {
+                dateAlertMap.type = GanttAlertType.UnAvailable;
+              }
+            } else {
+            }
+          } else {
+            dateAlertMap.user[handler] = GanttAlertType.UnAvailable;
+            dateAlertMap.type = GanttAlertType.UnAvailable;
+            dateAlertMap.conflictIds.push(task.artTaskId);
+          }
+        });
+        alertMap[current.format('YYYY-MM-DD')] = dateAlertMap;
+      }
+
+      // const;
+      return alertMap;
+    },
+    getAlertType: (date: Dayjs, _rows: Row<IApiArtTask>[], data: AlertMap) => {
+      return data[date.format('YYYY-MM-DD')]?.type ?? GanttAlertType.Normal;
+    },
+    component: GanttAlert,
+    params: users,
+    modeLastDayBorder: '#CDD6E4 solid 1px',
+    typeElemetPropsMap: {
+      [GanttAlertType.Available]: { style: { background: '#4ABE79' } },
+      [GanttAlertType.Normal]: {},
+      [GanttAlertType.UnAvailable]: {
+        style: {
+          background: '#F25757',
+        },
+      },
+    },
+  };
+};
+
+export const mergeDate = (days: Dayjs[]) => {
+  const sortedDays = days.slice().sort((a, b) => a.valueOf() - b.valueOf());
+  const dayMerges: [Dayjs, Dayjs][] = [];
+  let len = 0;
+  sortedDays.forEach((date) => {
+    const curMerge = dayMerges[len];
+    if (!curMerge) {
+      dayMerges.push([date, date]);
+      return;
+    }
+
+    if (date.diff(curMerge[1], 'day') === 1) {
+      curMerge[1] = date;
+    } else {
+      len += 1;
+      dayMerges.push([date, date]);
+      return;
+    }
+  });
+  return dayMerges.map((merge) =>
+    merge.map((date) => date.format('YYYY-MM-DD')).join('~')
+  );
+};
+
+export const buildNearAvailableAlertData = (
+  date: Dayjs,
+  alertMap: AlertMap,
+  users: string[]
+) => {
+  let curDayFmtStr = date.format('YYYY-MM-DD');
+  let diff = 0;
+  const userDateMap = users.reduce(
+    (map, user) => ({ ...map, [user]: [] }),
+    {} as { [user: string]: Dayjs[] }
+  );
+  while (alertMap[curDayFmtStr]?.type === GanttAlertType.Available) {
+    Object.entries(alertMap[curDayFmtStr].user)
+      .filter(([, type]) => type === GanttAlertType.Available)
+      .forEach(([user]) => {
+        userDateMap[user].push(dayjs(curDayFmtStr));
+      });
+    diff++;
+    curDayFmtStr = date.add(diff, 'day').format('YYYY-MM-DD');
+  }
+  diff = -1;
+  curDayFmtStr = date.add(diff, 'day').format('YYYY-MM-DD');
+  console.log(curDayFmtStr, 'curDayFmtStr', alertMap[curDayFmtStr]);
+  while (alertMap[curDayFmtStr]?.type === GanttAlertType.Available) {
+    console.log(curDayFmtStr, 'curDayFmtStr');
+
+    Object.entries(alertMap[curDayFmtStr].user)
+      .filter(([, type]) => type === GanttAlertType.Available)
+      .forEach(([user]) => {
+        userDateMap[user].push(dayjs(curDayFmtStr));
+      });
+    diff--;
+    curDayFmtStr = date.add(diff, 'day').format('YYYY-MM-DD');
+  }
+  return Object.entries(userDateMap)
+    .filter(([, value]) => !!value.length)
+    .map(([key, value]) => ({
+      handler: key,
+      date: mergeDate(value),
+    }));
 };

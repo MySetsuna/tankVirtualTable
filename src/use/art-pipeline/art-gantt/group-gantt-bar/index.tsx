@@ -1,10 +1,10 @@
-import { IApiArtStory, IApiArtTask } from "../../../art-task";
-import { debounce } from "lodash";
-import { Key, memo, useCallback, useEffect } from "react";
-import { useGanttExpand } from "../../gantt-expand-provider";
-import { ART_STORY_GROUP_ID } from "../lib/common";
-import React from "react";
-import { BaseGroupHeaderData, GroupGanttBarProps } from "../../../../Gantt";
+import { IApiArtStory, IApiArtTask } from '../../../art-task';
+import { debounce } from 'lodash';
+import { Key, memo, useCallback, useEffect } from 'react';
+import { useGanttExpand } from '../../gantt-expand-provider';
+import { ART_STORY_GROUP_ID } from '../lib/common';
+import React from 'react';
+import { BaseGroupHeaderData, GroupGanttBarProps } from '../../../../Gantt';
 
 type IProps = GroupGanttBarProps<
   IApiArtTask,
@@ -37,7 +37,7 @@ export const GroupGanttBar = memo((props: IProps) => {
       if (row.getIsExpanded()) {
         newExpands = expands.filter((key: any) => key !== group.id);
       } else {
-        console.log(group.id, "group.id");
+        console.log(group.id, 'group.id');
 
         newExpands = [...expands, group.id];
       }
@@ -59,12 +59,12 @@ export const GroupGanttBar = memo((props: IProps) => {
     <div
       onClick={handleExpanded}
       style={{
-        background: "lightskyblue",
-        width: "100%",
-        height: "100%",
+        background: 'lightskyblue',
+        width: '100%',
+        height: '100%',
       }}
     >
-      <span>{row.getIsExpanded() ? "👇" : "👉"}</span>
+      <span>{row.getIsExpanded() ? '👇' : '👉'}</span>
       <span>{row.groupingValue as string}</span>=======
       <span>{group.data.title}</span>
     </div>

@@ -84,7 +84,7 @@ export default function DeletableEdges(
             // if you have an interactive element, set pointer-events: all
             pointerEvents: 'all',
           }}
-          className="nodrag nopan"
+          className='nodrag nopan'
         >
           <Tooltip
             title={

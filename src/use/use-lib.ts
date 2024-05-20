@@ -1,6 +1,6 @@
-import dayjs from "dayjs";
-import { Task } from "../makeData";
-import { Row } from "@tanstack/react-table";
+import dayjs from 'dayjs';
+import { Task } from '../makeData';
+import { Row } from '@tanstack/react-table';
 
 export const getFrontLinkIds = (row: Task) => {
   return row.fromDepsIds;

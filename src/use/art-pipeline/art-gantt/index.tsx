@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { Key, useEffect, useMemo, useRef, useState } from "react";
-import dayjs, { Dayjs } from "dayjs";
+import React, { Key, useEffect, useMemo, useRef, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
 import {
   getBarEnd,
   getBarStart,
@@ -8,30 +8,31 @@ import {
   getLeafRowOriginalId,
   getPostLinkIds,
   getRowId,
-} from "./lib/utils";
-import { GanttBar } from "./gantt-bar";
+} from './lib/utils';
+import { GanttBar } from './gantt-bar';
 import {
   IApiArtPip,
   IApiArtStory,
   IApiArtStoryParams,
   IApiArtTask,
   IApiArtTaskParams,
-} from "../../art-task";
+} from '../../art-task';
 import {
   ART_GROUP_PREFIX,
   ART_STORY_GROUP_ID,
+  getAlertOptions,
   getDefaultColumns,
   getGanttDataSource,
   getGroupOptions,
   getGroupedDataSource,
-} from "./lib/common";
-import { Resizable } from "re-resizable";
-import { useGanttExpand } from "../gantt-expand-provider";
-import { GanttMode } from "../../../Gantt/components/VirtualGantt";
-import { Gantt, GroupOption } from "../../../Gantt";
-import { GroupedTable } from "../../../grouped-table";
-import { ScrollSync, ScrollSyncNode } from "scroll-sync-react";
-import { isEmpty } from "lodash";
+} from './lib/common';
+import { Resizable } from 're-resizable';
+import { useGanttExpand } from '../gantt-expand-provider';
+import { GanttMode } from '../../../Gantt/components/VirtualGantt';
+import { Gantt, GanttNode, GroupOption } from '../../../Gantt';
+import { GroupedTable } from '../../../grouped-table';
+import { ScrollSync, ScrollSyncNode } from 'scroll-sync-react';
+import { isEmpty } from 'lodash';
 
 interface IProps {
   readonly tasks: IApiArtTask[];
@@ -40,6 +41,7 @@ interface IProps {
   readonly onListChange?: () => void;
   readonly grouping?: (keyof IApiArtTask)[];
   readonly isGroupView: boolean;
+  readonly setTasks: React.Dispatch<React.SetStateAction<IApiArtTask[]>>;
 }
 
 export const ArtPipGantt = (props: IProps) => {
@@ -48,12 +50,15 @@ export const ArtPipGantt = (props: IProps) => {
     stories,
     artPip,
     onListChange,
+    setTasks,
     isGroupView,
     grouping = [],
   } = props;
   const groupGap = 10;
   const rowHeight = 38;
   const headerHeight = 30;
+
+  const users = ['用户3', '用户4', '用户5', '用户6'];
 
   const groupedTableRef = useRef<any>();
 
@@ -64,6 +69,10 @@ export const ArtPipGantt = (props: IProps) => {
   const [groupOptions, setGroupOptions] = useState<GroupOption<IApiArtTask>[]>(
     []
   );
+
+  const ganttAletOptions = useMemo(() => {
+    return getAlertOptions(users, tasks);
+  }, [users, tasks]);
 
   const [
     expandKeys,
@@ -129,12 +138,33 @@ export const ArtPipGantt = (props: IProps) => {
     setSelectedRowKeys(selectedRowKeys);
   };
 
+  const onBarChange = (
+    startAt: dayjs.Dayjs,
+    endAt: dayjs.Dayjs,
+    node: GanttNode<IApiArtTask>
+  ) => {
+    setTasks((tasks) => {
+      return tasks.map((task) => {
+        const changeTask = node.data.row.original;
+        if (task.artTaskId === changeTask.artTaskId) {
+          return {
+            ...task,
+            startAt: startAt.format('YYYY-MM-DD'),
+            endAt: endAt.format('YYYY-MM-DD'),
+          };
+        }
+        return task;
+      });
+    });
+  };
+
   const ganttExpanded = useMemo(() => {
     const expandMap: { [expandKey: string]: true } = {};
     const groupKeys = groupOptions?.map(({ groupId }) => groupId) ?? [];
     if (isEmpty(groupKeys)) return expandMap;
     expandKeys.forEach((id) => {
-      expandMap[`${ART_GROUP_PREFIX}${ART_STORY_GROUP_ID}:${id}` as string] = true;
+      expandMap[`${ART_GROUP_PREFIX}${ART_STORY_GROUP_ID}:${id}` as string] =
+        true;
     });
     return expandMap;
   }, [expandKeys, groupOptions]);
@@ -152,14 +182,15 @@ export const ArtPipGantt = (props: IProps) => {
   }, [grouping, stories]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {users.join('!!!')}
       <div>
-        <div style={{ height: 140, display: "flex", gap: 5, flexWrap: "wrap" }}>
+        <div style={{ height: 140, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           <form
             onSubmit={onCreateTask}
             style={{
-              display: "flex",
-              flexWrap: "wrap",
+              display: 'flex',
+              flexWrap: 'wrap',
               gap: 5,
             }}
           >
@@ -215,12 +246,12 @@ export const ArtPipGantt = (props: IProps) => {
             </div>
             <button type="submit">创建任务</button>
           </form>
-          <hr style={{ width: "100%" }} />
+          <hr style={{ width: '100%' }} />
           <form
             onSubmit={onCreateStory}
             style={{
-              display: "flex",
-              flexWrap: "wrap",
+              display: 'flex',
+              flexWrap: 'wrap',
               gap: 5,
             }}
           >
@@ -234,7 +265,7 @@ export const ArtPipGantt = (props: IProps) => {
             </div>
             <button type="submit">创建需求</button>
           </form>
-          <hr style={{ width: "100%" }} />
+          <hr style={{ width: '100%' }} />
         </div>
         <select
           value={ganttMode}
@@ -247,7 +278,7 @@ export const ArtPipGantt = (props: IProps) => {
         </select>
         <input
           type="date"
-          value={selectDate.format("YYYY-MM-DD")}
+          value={selectDate.format('YYYY-MM-DD')}
           onChange={(event) => {
             setSelectDate(dayjs(event.target.value));
           }}
@@ -260,10 +291,9 @@ export const ArtPipGantt = (props: IProps) => {
           Go to Today
         </button>
       </div>
-      <div style={{ flex: "auto", height: 0 }}>
+      <div style={{ flex: 'auto', height: 0 }}>
         <Gantt
-          alertOptionMap={{}}
-          alertType={{ fn: () => {} } as any}
+          alertOptions={ganttAletOptions}
           GanttBar={GanttBar}
           data={ganttData}
           rowHeight={rowHeight}
@@ -284,14 +314,14 @@ export const ArtPipGantt = (props: IProps) => {
           bufferMonths={[2, 2]}
           bufferDay={40}
           onBarChange={(startAt, endAt, node) => {
-            console.log(startAt, endAt, node);
+            onBarChange(startAt, endAt, node);
           }}
           style={{
-            position: "relative",
-            overflow: "auto",
+            position: 'relative',
+            overflow: 'auto',
             width: 1200,
             height: 700,
-            flex: "auto",
+            flex: 'auto',
           }}
           table={
             <Resizable defaultSize={{ height: 700, width: 300 }}>
@@ -307,11 +337,11 @@ export const ArtPipGantt = (props: IProps) => {
                 dataSource={groupedDataSource}
                 rowSelection={{
                   columnWidth: 30,
-                  type: "checkbox",
+                  type: 'checkbox',
                   selectedRowKeys,
                   onChange,
                   getCheckboxProps: (record: any) => ({
-                    disabled: record.name === "Disabled User", // Column configuration not to be checked
+                    disabled: record.name === 'Disabled User', // Column configuration not to be checked
                     name: record.name,
                   }),
                 }}
@@ -328,7 +358,7 @@ export const ArtPipGantt = (props: IProps) => {
                   setExpandKeys(ids);
                   setExpandedModuleIdx(ids);
                 }}
-                rowClassName={"123"}
+                rowClassName={'123'}
                 bordered
                 filters={[]}
                 pagination={false}

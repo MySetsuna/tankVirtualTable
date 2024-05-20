@@ -24,7 +24,7 @@ export interface IApiArtTask {
   readonly progress: number;
   readonly status: string;
   // readonly thumbnailUrl: string;
-  // readonly handler: string;
+  readonly handler: string;
   readonly startAt: string;
   readonly endAt: string;
   // readonly priority: string;
@@ -39,7 +39,7 @@ export interface IApiArtTask {
   // };
 }
 
-export interface IApiArtTaskParams extends Omit<IApiArtTask, "artTaskId"> {
+export interface IApiArtTaskParams extends Omit<IApiArtTask, 'artTaskId'> {
   readonly artTaskId?: number;
 }
 

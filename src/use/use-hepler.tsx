@@ -1,10 +1,10 @@
-import React, { Key } from "react";
-import { Row } from "@tanstack/react-table";
-import { GroupOption } from "../Gantt";
-import { getStartAndEnd } from "../Gantt/components/VirtualGantt/utils";
-import dayjs, { Dayjs } from "dayjs";
-import { Task } from "../makeData";
-import { GroupKeyer } from "../Gantt/types/gantt";
+import React, { Key } from 'react';
+import { Row } from '@tanstack/react-table';
+import { GroupOption } from '../Gantt';
+import { getStartAndEnd } from '../Gantt/components/VirtualGantt/utils';
+import dayjs, { Dayjs } from 'dayjs';
+import { Task } from '../makeData';
+import { GroupKeyer } from '../Gantt/types/gantt';
 
 export const getGroupOptions = (
   grouping: GroupKeyer<Task>[],
@@ -12,7 +12,7 @@ export const getGroupOptions = (
   getEnd: (t: Task) => Dayjs | undefined
 ): GroupOption<Task>[] => [
   {
-    groupId: "group__storyId",
+    groupId: 'group__storyId',
     groupKey(task) {
       return task.storyId;
     },
@@ -31,11 +31,11 @@ export const getGroupOptions = (
         <div
           onClick={() => {
             row.toggleExpanded();
-            console.log(group, "group");
+            console.log(group, 'group');
           }}
-          style={{ background: "lightskyblue", width: "100%", height: "100%" }}
+          style={{ background: 'lightskyblue', width: '100%', height: '100%' }}
         >
-          <span>{row.getIsExpanded() ? "👇" : "👉"}</span>
+          <span>{row.getIsExpanded() ? '👇' : '👉'}</span>
           <span>{row.groupingValue as string}</span>
         </div>
       );

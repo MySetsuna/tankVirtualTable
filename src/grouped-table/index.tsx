@@ -1,29 +1,29 @@
-import { Table } from "antd";
-import { SchemaFilter } from "./components/schema-filter";
+import { Table } from 'antd';
+import { SchemaFilter } from './components/schema-filter';
 import {
   IGroupedTableDataItem,
   ITableDataItem,
   ITableProps,
   ITableRowType,
-} from "./model";
+} from './model';
 import {
   TITLE_ROW_PREFIX,
   isAllInvalidKey,
   cellAndRenderTitle,
   getDataSource,
   TITLE_EMPTY_ROW_PREFIX,
-} from "./lib";
-import { RowSelectMethod, TableRowSelection } from "antd/es/table/interface";
+} from './lib';
+import { RowSelectMethod, TableRowSelection } from 'antd/es/table/interface';
 import {
   forwardRef,
   useEffect,
   useImperativeHandle,
   useMemo,
   useState,
-} from "react";
-import styles from "./style.module.scss";
-import classNames from "classnames";
-import React from "react";
+} from 'react';
+import styles from './style.module.scss';
+import classNames from 'classnames';
+import React from 'react';
 
 export const GroupedTable = forwardRef((props: ITableProps, ref: any) => {
   // 记录模块的展开收起
@@ -35,13 +35,13 @@ export const GroupedTable = forwardRef((props: ITableProps, ref: any) => {
     columns,
     filters,
     onFilterChange = () => {},
-    size = "small",
+    size = 'small',
   } = props;
 
   const isGrouped =
     dataSource?.length &&
     dataSource.every((v) => {
-      return ["title", "dataSource"].every((key) =>
+      return ['title', 'dataSource'].every((key) =>
         Object.keys(v).includes(key)
       );
     });
@@ -51,12 +51,12 @@ export const GroupedTable = forwardRef((props: ITableProps, ref: any) => {
     index: number,
     indent: number
   ) => {
-    const outerClassName = props?.rowClassName || "";
+    const outerClassName = props?.rowClassName || '';
     return classNames(
-      typeof outerClassName === "function"
+      typeof outerClassName === 'function'
         ? outerClassName(record, index, indent)
         : outerClassName,
-      record?._type || ""
+      record?._type || ''
     );
   };
 
