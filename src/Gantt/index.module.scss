@@ -13,6 +13,13 @@
     }
     .react-flow__resize-control.line {
       border-color: #00000000 !important;
+      &.right {
+        left: calc(100% - 5px);
+      }
+      &.left {
+        left: 5px;
+        z-index: 1;
+      }
     }
     .react-flow__resize-control.handle {
       display: none !important;
@@ -21,10 +28,10 @@
     .react-flow__resize-control.line.bottom {
       cursor: auto;
     }
-
-    .gantt-table {
-      ::-webkit-scrollbar {
-        display: none;
+    .react-flow__attribution {
+      * {
+        pointer-events: none;
+        color: #00000000;
       }
     }
   }

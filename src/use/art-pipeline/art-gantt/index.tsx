@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { Key, useEffect, useRef, useState } from "react";
+import React, { Key, useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { Dayjs } from "dayjs";
 import {
   getBarEnd,
   getBarStart,
   getFrontLinkIds,
+  getLeafRowOriginalId,
   getPostLinkIds,
   getRowId,
 } from "./lib/utils";
@@ -17,6 +18,8 @@ import {
   IApiArtTaskParams,
 } from "../../art-task";
 import {
+  ART_GROUP_PREFIX,
+  ART_STORY_GROUP_ID,
   getDefaultColumns,
   getGanttDataSource,
   getGroupOptions,
@@ -28,6 +31,7 @@ import { GanttMode } from "../../../Gantt/components/VirtualGantt";
 import { Gantt, GroupOption } from "../../../Gantt";
 import { GroupedTable } from "../../../grouped-table";
 import { ScrollSync, ScrollSyncNode } from "scroll-sync-react";
+import { isEmpty } from "lodash";
 
 interface IProps {
   readonly tasks: IApiArtTask[];
@@ -125,12 +129,24 @@ export const ArtPipGantt = (props: IProps) => {
     setSelectedRowKeys(selectedRowKeys);
   };
 
+  const ganttExpanded = useMemo(() => {
+    const expandMap: { [expandKey: string]: true } = {};
+    const groupKeys = groupOptions?.map(({ groupId }) => groupId) ?? [];
+    if (isEmpty(groupKeys)) return expandMap;
+    expandKeys.forEach((id) => {
+      expandMap[`${ART_GROUP_PREFIX}${ART_STORY_GROUP_ID}:${id}` as string] = true;
+    });
+    return expandMap;
+  }, [expandKeys, groupOptions]);
+
   useEffect(() => {
     const groupOptions = getGroupOptions(
       stories,
       grouping.filter((groupKey) => !!groupKey),
       getBarStart,
-      getBarEnd
+      getBarEnd,
+      ART_STORY_GROUP_ID,
+      ART_GROUP_PREFIX
     );
     setGroupOptions(groupOptions);
   }, [grouping, stories]);
@@ -246,19 +262,23 @@ export const ArtPipGantt = (props: IProps) => {
       </div>
       <div style={{ flex: "auto", height: 0 }}>
         <Gantt
+          alertOptionMap={{}}
+          alertType={{ fn: () => {} } as any}
           GanttBar={GanttBar}
           data={ganttData}
           rowHeight={rowHeight}
           groupGap={groupGap}
           isGroupView={isGroupView}
-          selectDate={selectDate}
-          ganttMode={ganttMode}
+          ganttExpanded={ganttExpanded}
+          currentAt={selectDate}
+          mode={ganttMode}
           groupOptions={groupOptions}
           getBarEnd={getBarEnd}
           getBarStart={getBarStart}
-          getFrontLinkIds={getFrontLinkIds}
-          getPostLinkIds={getPostLinkIds}
+          getFromLinkIds={getFrontLinkIds}
+          getToLinkIds={getPostLinkIds}
           getRowId={getRowId}
+          getLeafRowOriginalId={getLeafRowOriginalId}
           headerHeight={[headerHeight]}
           scrollSyncClassName="ant-table-body"
           bufferMonths={[2, 2]}

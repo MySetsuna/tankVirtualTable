@@ -9,16 +9,18 @@ import {
   getExpandedRowModel,
   getGroupedRowModel,
   useReactTable,
-} from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
+} from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import React, {
   CSSProperties,
   FC,
+  HTMLAttributes,
   Key,
   MutableRefObject,
   ReactElement,
   ReactNode,
   forwardRef,
+  memo,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -26,32 +28,46 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
-import dayjs, { Dayjs } from "dayjs";
-import weekday from "dayjs/plugin/weekday";
+} from 'react';
+import dayjs, { Dayjs } from 'dayjs';
+import weekday from 'dayjs/plugin/weekday';
 import {
   GanttHeaderBuilder,
   WEEKDAY_MAP,
   buildGanttHeader,
   getDayDiff,
+  getEdges,
+  getIsModeLastDay,
   getNodes,
   getRangeAtByCurrentAt,
-} from "./utils";
-import weekOfYear from "dayjs/plugin/weekOfYear";
-import weekYear from "dayjs/plugin/weekYear";
-import advancedFormat from "dayjs/plugin/advancedFormat";
-import "dayjs/locale/zh-cn";
+} from '../../utils';
+import weekOfYear from 'dayjs/plugin/weekOfYear';
+import weekYear from 'dayjs/plugin/weekYear';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
+import 'dayjs/locale/zh-cn';
 import {
   GanttBarData,
   GanttBarProps,
   GanttNode,
   GroupGanttBarProps,
   GroupOption,
-} from "../..";
-import { NodeProps, NodeTypes, useNodesState, useReactFlow } from "reactflow";
-import { GanttBarBox } from "../GanttBarBox";
-import GanttFlow from "../GanttFlow";
-import { ScrollSync, ScrollSyncNode } from "scroll-sync-react";
+} from '../..';
+import {
+  Connection,
+  NodeChange,
+  NodeProps,
+  NodeTypes,
+  applyNodeChanges,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+} from 'reactflow';
+import { GanttBarBox } from '../GanttBarBox';
+import GanttFlow from '../GanttFlow';
+import { isEmpty, isEqual, uniqBy } from 'lodash';
+import ScrollMirror from 'scrollmirror';
+import { EnumType, TupleType } from 'typescript';
+import { current } from '@reduxjs/toolkit';
 
 dayjs.extend(advancedFormat);
 
@@ -76,7 +92,7 @@ export enum GanttMode {
 }
 
 export enum GanttCustomMode {
-  CustomMode = "CustomMode",
+  CustomMode = 'CustomMode',
 }
 
 export type HeadRender<T> = {
@@ -90,7 +106,31 @@ export type HeadRender<T> = {
 
 export type BufferMonths = [number] | [number, number];
 
-type VirtualGanttProps<T extends object = any> = {
+export type HeaderHeightOps =
+  | [number]
+  | [number, number]
+  | [number, number, number];
+
+export enum BaseGanttAlertType {
+  idle = 'idle',
+  conflict = 'conflict',
+}
+
+export interface GanttAlertOption<T = any> {
+  [key: string]:
+    | undefined
+    | ({
+        component?: (props: {
+          type: string;
+          date: Dayjs;
+          rows: Row<T>[];
+          data: any;
+        }) => ReactNode;
+        modeLastDayBorder?: CSSProperties['border'];
+      } & HTMLAttributes<HTMLDivElement>);
+}
+
+export type VirtualGanttProps<T extends object = any> = {
   data: T[];
   style?: CSSProperties;
   rowHeight?: number;
@@ -103,9 +143,10 @@ type VirtualGanttProps<T extends object = any> = {
   isWeekStartMonday?: boolean;
   getBarStart: (row: T) => Dayjs | undefined;
   getBarEnd: (row: T) => Dayjs | undefined;
-  getFrontLinkIds: (row: T) => Key[];
-  getPostLinkIds: (row: T) => Key[];
+  getToLinkIds: (row: T) => Key[];
+  getFromLinkIds: (row: T) => Key[];
   getRowId: (row: Row<T>) => string;
+  getLeafRowOriginalId: (row: Row<T>) => string;
   minBarRange?: number;
   // barStyle?: CSSProperties | ((row: T, index: number) => CSSProperties);
   // barClassName?: string | ((row: T, index: number) => string);
@@ -113,11 +154,34 @@ type VirtualGanttProps<T extends object = any> = {
   groupOptions?: Array<GroupOption<T>>;
   GanttBar?: (props: GanttBarProps<T>) => ReactNode;
   groupGap?: number;
+  ganttExpanded?: { [expandKey: string]: true };
   showYearRow?: boolean;
-  headerHeight?: [number] | [number, number] | [number, number, number];
+  headerHeight?: HeaderHeightOps;
+  alertHeight?: number;
   table: ReactElement;
+  scrollSyncElementQuery?: string;
   scrollSyncClassName: string;
-  onBarChange: (startAt, endAt, node) => void;
+  onBarChange?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<T>) => void;
+  onDisConnect?: (from: string, to: string) => void;
+  onConnect?: (connection: Connection) => void;
+  renderEdgeDeleteTitle?: (props: {
+    form: GanttNode<any>;
+    to: GanttNode<any>;
+  }) => ReactNode;
+  getCustomModeLastDay?: (date: Dayjs, isWeekStartMonday?: boolean) => boolean;
+  alertOptionMap: GanttAlertOption<T>;
+  alertType: {
+    fn: (
+      date: Dayjs,
+      rows: Row<T>[],
+      params: any
+    ) => { type: string; data: any };
+    params: any;
+  };
+  showAlert?: boolean;
+  defaultAlertStyle?: CSSProperties;
+  defaultAlertClassName?: string;
+  hasLastGroupGap?: boolean;
 } & (
   | {
       startAt: Dayjs;
@@ -142,21 +206,23 @@ type VirtualGanttProps<T extends object = any> = {
         customHeaderBuilder: GanttHeaderBuilder;
       }
   );
-export const VirtualGantt = (props: VirtualGanttProps) => {
+const VirtualGanttComponent = (props: VirtualGanttProps) => {
   const {
     mode = GanttMode.MonthDay,
     overscan = 10,
     bufferDay = 10,
     groupGap = 10,
+    hasLastGroupGap = false,
     rowHeight = 34,
     cellWidth = 50,
     minBarRange = 1,
+    alertHeight = 16,
     data,
     currentAt,
     startAt,
     endAt,
     headRender,
-    headerHeight: headerHeightOps,
+    headerHeight: headerHeightOp,
     showYearRow,
     style,
     isHoliday,
@@ -167,21 +233,40 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
     isGroupView,
     getBarStart,
     getBarEnd,
-    getFrontLinkIds,
-    getPostLinkIds,
+    getToLinkIds,
+    getFromLinkIds,
     getRowId,
     GanttBar,
     customHeaderBuilder,
     table: tableNode,
     scrollSyncClassName,
+    scrollSyncElementQuery,
     onBarChange,
+    onDisConnect,
+    onConnect,
+    getLeafRowOriginalId,
+    ganttExpanded,
+    renderEdgeDeleteTitle,
+    getCustomModeLastDay,
+    showAlert,
+    alertOptionMap,
+    defaultAlertStyle,
+    defaultAlertClassName,
+    alertType: getAlertType,
   } = props;
   type TData = (typeof data)[0];
 
   const [columns, setColumns] = useState<ColumnDef<any>[]>([]);
+
+  const [headerHeightOps, setheaderHeightOps] = useState<
+    HeaderHeightOps | undefined
+  >(headerHeightOp);
+
   const [nodes, setNodes, onNodesChange] = useNodesState(
     [] as GanttNode<TData>[]
   );
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
   const [startDate, setStartDate] = useState<Dayjs | undefined>(
     startAt?.clone()
   );
@@ -195,9 +280,13 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
   const [currentDate, setCurrentDate] = useState<Dayjs | undefined>(currentAt);
   const scrollToTimer = useRef<NodeJS.Timeout | null>(null);
   const scrollCallback = useRef<(() => void) | null>(() => {});
-  const [viewportX, setViewportX] = useState<number>(0);
+  // const [viewportX, setViewportX] = useState<number>(0);
 
   const parentRef = React.useRef<HTMLDivElement>(null);
+
+  const viewportX = useMemo(() => {
+    return (originStart?.diff(startDate, 'day') ?? 0) * cellWidth;
+  }, [originStart, startDate, cellWidth]);
 
   const { groupColumns, grouping } = useMemo(() => {
     return {
@@ -220,7 +309,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
               setNodes={setNodes}
               onNodesChange={onNodesChange}
               onBarChange={onBarChange}
-              startDate={startDate}
+              originStart={originStart}
             />
           ),
         };
@@ -232,14 +321,25 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
             setNodes={setNodes}
             onNodesChange={onNodesChange}
             onBarChange={onBarChange}
-            startDate={startDate}
+            originStart={originStart}
+            getBarStart={getBarStart}
+            getBarEnd={getBarEnd}
+            rows={rows}
           >
             {GanttBar}
           </GanttBarBox>
         ),
       }
     );
-  }, [groupOptions, GanttBar]);
+  }, [
+    groupOptions,
+    GanttBar,
+    originStart,
+    onBarChange,
+    onNodesChange,
+    getBarStart,
+    getBarEnd,
+  ]);
 
   useEffect(() => {
     if (startAt && endAt) {
@@ -250,10 +350,34 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
   }, [startAt, endAt]);
 
   useEffect(() => {
+    if (bufferM && !isEqual(bufferM, bufferMonths)) {
+      setBufferMonths(bufferM);
+    }
+  }, [bufferM, bufferMonths]);
+
+  useEffect(() => {
+    if (headerHeightOp && !isEqual(headerHeightOps, headerHeightOp)) {
+      setheaderHeightOps(headerHeightOp);
+    }
+  }, [headerHeightOps, headerHeightOp]);
+
+  React.useEffect(() => {
+    new ScrollMirror(
+      document.querySelectorAll(
+        scrollSyncElementQuery ?? `.${scrollSyncClassName}`
+      ),
+      {
+        horizontal: false,
+        proportional: true,
+      }
+    );
+  }, [tableNode]);
+
+  useEffect(() => {
     setCurrentDate(currentAt?.isValid() ? currentAt : dayjs());
   }, [currentAt]);
 
-  const { setViewport, zoomIn, zoomOut } = useReactFlow();
+  const { setViewport } = useReactFlow();
 
   useEffect(() => {
     setViewport({
@@ -274,7 +398,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
       setOriginStart(startAt);
       setEndDate(endAt);
       if (parentRef.current && isInfiniteX) {
-        const startOffset = currentDate.diff(startAt, "day");
+        const startOffset = currentDate.diff(startAt, 'day');
         scrollCallback.current = () =>
           parentRef.current?.scrollTo({
             left: (startOffset > 3 ? startOffset - 3 : startOffset) * cellWidth,
@@ -299,7 +423,9 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
   const table = useReactTable({
     data,
     columns,
-    enableGrouping: false,
+    state: {
+      expanded: ganttExpanded,
+    },
     getCoreRowModel: getCoreRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
@@ -318,6 +444,10 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
     }
   }, [table, isGroupView, grouping]);
 
+  useEffect(() => {
+    console.log(table.getState().expanded, 'table expanded');
+  }, [table.getState().expanded]);
+
   const { rows } = table.getRowModel();
   // const grouingRows = useMemo(()=>{
   //   const groupingRows = [];
@@ -335,6 +465,22 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
   });
 
   useEffect(() => {
+    const edges = getEdges(
+      rows,
+      rowVirtualizer.getVirtualItems(),
+      getFromLinkIds,
+      getLeafRowOriginalId
+    );
+
+    setEdges(edges);
+  }, [
+    rows,
+    rowVirtualizer.getVirtualItems(),
+    getFromLinkIds,
+    getLeafRowOriginalId,
+  ]);
+
+  useEffect(() => {
     if (originStart) {
       const nodes = getNodes(
         rows,
@@ -346,11 +492,27 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
         cellWidth,
         minBarRange,
         getRowId,
+        getLeafRowOriginalId,
         groupGap,
         !!isGroupView,
         groupOptions
       );
-      setNodes(nodes);
+      setNodes((oldNodes) => {
+        const changes = isEmpty(oldNodes)
+          ? nodes
+          : nodes.map((newNode) => {
+              const oldNode = oldNodes.find(({ id }) => newNode.id === id);
+
+              if (isEqual(oldNode, newNode)) {
+                return oldNode as GanttNode<TData>;
+              }
+              if (oldNode) {
+                return Object.assign(oldNode, newNode);
+              }
+              return newNode as GanttNode<TData>;
+            });
+        return changes;
+      });
     }
   }, [
     originStart,
@@ -362,6 +524,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
     minBarRange,
     rowVirtualizer.getVirtualItems(),
     groupOptions,
+    getLeafRowOriginalId,
+    getRowId,
   ]);
 
   // 是否使用同步effect？使用useEffect会使内容闪烁
@@ -415,9 +579,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
           });
           scrollCallback.current = null;
         };
-        setViewportX((pre) => pre + bufferDay * cellWidth);
-        setEndDate((date) => date?.add(-bufferDay, "day"));
-        setStartDate((date) => date?.add(-bufferDay, "day"));
+        setEndDate((date) => date?.add(-bufferDay, 'day'));
+        setStartDate((date) => date?.add(-bufferDay, 'day'));
         return;
       }
       if (toRight) {
@@ -427,9 +590,8 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
           });
           scrollCallback.current = null;
         };
-        setViewportX((pre) => pre - bufferDay * cellWidth);
-        setStartDate((date) => date?.add(bufferDay, "day"));
-        setEndDate((date) => date?.add(bufferDay, "day"));
+        setStartDate((date) => date?.add(bufferDay, 'day'));
+        setEndDate((date) => date?.add(bufferDay, 'day'));
         return;
       }
     }
@@ -441,32 +603,53 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
 
   const leafHeaderGroup = visibleHeaderGroups[visibleHeaderGroups.length - 1];
 
-  const headerHeight = visibleHeaderGroups.reduce(
-    (totalHeight, _headerGroup, index) => {
+  const headerHeight =
+    visibleHeaderGroups.reduce((totalHeight, _headerGroup, index) => {
       const height =
         headerHeightOps?.[index] || headerHeightOps?.[0] || rowHeight;
       return totalHeight + height;
-    },
-    0
-  );
+    }, 0) + (showAlert ? alertHeight : 0);
 
   const bodyVisibleHeight =
     (parentRef.current?.clientHeight ?? 0) - headerHeight;
 
-  const ganttBodyHeight = rowVirtualizer.getTotalSize();
+  const ganttBodyHeight =
+    rowVirtualizer.getTotalSize() + (hasLastGroupGap ? groupGap : 0);
   const scrollHeight = ganttBodyHeight + headerHeight;
   const scrollWidth = table
     .getHeaderGroups()[0]
     .headers.filter((header) => !grouping.includes(header.column.id))
     .reduce((total, cur) => total + cur.getSize(), 0);
 
+  // useEffect(() => {
+  //   const colMap = {};
+  //   const idleMap = {};
+  //   if (!!startDate && !!endDate && getAlertType) {
+  //     for (
+  //       let current = startDate;
+  //       current?.diff(endDate, 'day') !== 0;
+  //       current?.add(1, 'day')
+  //     ) {
+  //       const { type, data } =
+  //         getAlertType.fn(current, rows, getAlertType.params) ?? {};
+  //     }
+  //   }
+  // }, [startDate, endDate, getAlertType]);
+
   return (
-    <div style={{ display: "flex", height: "100%" }}>
+    <div style={{ display: 'flex', height: '100%' }}>
+      <div style={{ position: 'fixed', color: 'red', zIndex: 99999 }}>
+        {originStart?.format('YYYY-MM-DD')}::: {startDate?.format('YYYY-MM-DD')}{' '}
+        :::
+        {startDate?.diff(originStart, 'day')}:::
+        {(startDate?.diff(originStart, 'day') ?? 0) * cellWidth}:::
+        {viewportX}
+      </div>
       {tableNode}
       <div
         ref={parentRef}
-        className={["gantt-container", "container", scrollSyncClassName].join(
-          " "
+        className={['gantt-container', 'container', scrollSyncClassName].join(
+          ' '
         )}
         style={style}
         onScroll={handleScroll}
@@ -481,11 +664,11 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
           <div
             className="gantt-header"
             style={{
-              display: "flex",
-              position: "sticky",
+              display: 'flex',
+              position: 'sticky',
               top: 0,
               zIndex: 3,
-              flexDirection: "column",
+              flexDirection: 'column',
               // overflow: "hidden",
             }}
           >
@@ -496,7 +679,7 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                 <div
                   key={headerGroup.id}
                   // style={{ display: "flex", overflow: "hidden" }}
-                  style={{ display: "flex" }}
+                  style={{ display: 'flex' }}
                 >
                   {headerGroup.headers
                     .filter((header) => !grouping.includes(header.column.id))
@@ -508,16 +691,16 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                           key={header.id}
                           // colSpan={header.colSpan}
                           style={{
-                            background: "black",
-                            color: "white",
-                            fontWeight: "bolder",
+                            background: 'black',
+                            color: 'white',
+                            fontWeight: 'bolder',
                             width: header.getSize(),
                             height,
                             flexShrink: 0,
-                            borderRight: "1px white solid",
+                            borderRight: '1px white solid',
                             borderBottom: !isLeafHeader
-                              ? "1px white solid"
-                              : "unset",
+                              ? '1px white solid'
+                              : 'unset',
                             zIndex: index,
                           }}
                         >
@@ -526,22 +709,22 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                               style={
                                 !isLeafHeader
                                   ? {
-                                      position: "sticky",
+                                      position: 'sticky',
                                       left: 0,
                                       width: 0,
-                                      whiteSpace: "nowrap",
+                                      whiteSpace: 'nowrap',
                                       height,
 
-                                      overflow: "visible",
+                                      overflow: 'visible',
                                     }
                                   : { height }
                               }
                             >
                               <div
                                 style={{
-                                  position: "absolute",
-                                  overflow: "hidden",
-                                  padding: "0 5px",
+                                  position: 'absolute',
+                                  overflow: 'hidden',
+                                  padding: '0 5px',
                                   width: header.getSize(),
                                 }}
                               >
@@ -558,92 +741,202 @@ export const VirtualGantt = (props: VirtualGanttProps) => {
                 </div>
               );
             })}
+            {showAlert && (
+              <div
+                className="gantt-alert"
+                style={{ height: alertHeight, display: 'flex', zIndex: 999 }}
+              >
+                {leafHeaderGroup?.headers
+                  .filter((header) => !grouping.includes(header.column.id))
+                  .map((header, index) => {
+                    const date = dayjs(header.id);
+
+                    const isCurrentDate =
+                      currentAt?.format('YYYY-MM-DD') ===
+                      date.format('YYYY-MM-DD');
+
+                    const isModeLastDay =
+                      mode === GanttCustomMode.CustomMode
+                        ? getCustomModeLastDay?.(date, isWeekStartMonday) ??
+                          false
+                        : getIsModeLastDay(mode, date, isWeekStartMonday);
+                    const dayLineTop =
+                      headerHeightOps?.[headerHeightOps.length - 1] ||
+                      headerHeightOps?.[0] ||
+                      rowHeight;
+
+                    const dayLineHeight = Math.max(
+                      ganttBodyHeight,
+                      bodyVisibleHeight
+                    );
+
+                    const { type, data } =
+                      getAlertType.fn(date, rows, getAlertType.params) ?? {};
+
+                    const alertOption = alertOptionMap[type];
+
+                    const {
+                      modeLastDayBorder,
+                      component: AlertComponent,
+                      ...rest
+                    } = alertOption ?? {};
+
+                    return (
+                      <div
+                        className={defaultAlertClassName}
+                        key={header.id}
+                        {...rest}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          width: header.getSize(),
+                          height: '100%',
+                          // backgroundColor: "red",
+                          // pointerEvents: "none",
+                          // backgroundColor: 'red',
+                          // zIndex: isCurrentDate ?  : -1,
+                          zIndex: 888,
+                          position: 'relative',
+                          ...defaultAlertStyle,
+
+                          borderRight: isModeLastDay
+                            ? modeLastDayBorder ?? '1px solid black'
+                            : 'unset',
+                          ...rest.style,
+                        }}
+                      >
+                        {AlertComponent && (
+                          <AlertComponent
+                            type={type}
+                            date={date}
+                            rows={rows}
+                            data={data}
+                          />
+                        )}
+                        {isCurrentDate && (
+                          <>
+                            <div
+                              style={{
+                                height: dayLineHeight,
+                                width: 5,
+                                backgroundColor: 'transparent',
+                                position: 'absolute',
+                                top: -dayLineTop,
+                                display: 'flex',
+                                justifyContent: 'start',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  background: '#5764F0',
+                                  borderRadius: '100%',
+                                  width: 6,
+                                  height: 6,
+                                  position: 'relative',
+                                }}
+                              ></div>
+                              <div
+                                style={{
+                                  height: '100%',
+                                  width: 2,
+                                  backgroundColor: '#5764F0',
+                                  position: 'absolute',
+                                  display: 'flex',
+                                  justifyContent: 'start',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                }}
+                              ></div>
+                            </div>
+                            <div
+                              style={{
+                                color: 'lightblue',
+                                position: 'absolute',
+                                left: '100%',
+                              }}
+                            ></div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
+
           <div
             className="gantt-flow"
             style={{
-              position: "absolute",
-              display: "flex",
+              position: 'absolute',
+              display: 'flex',
               top: headerHeight,
               width: scrollWidth,
               height: Math.max(ganttBodyHeight, bodyVisibleHeight),
               zIndex: 2,
-              backgroundColor: "white",
+              backgroundColor: 'white',
               // pointerEvents: "none",
             }}
           >
             <GanttFlow
+              renderEdgeDeleteTitle={renderEdgeDeleteTitle}
               nodes={nodes}
               setNodes={setNodes}
               cellWidth={cellWidth}
               nodeTypes={nodeTypes}
-              startDate={startDate}
+              originStartDate={originStart}
               onBarChange={onBarChange}
+              edges={edges}
+              setEdges={setEdges}
+              onEdgesChange={onEdgesChange}
+              onDisConnect={onDisConnect}
+              onConnect={onConnect}
             >
               <div
                 className="gantt-background"
                 style={{
-                  position: "absolute",
-                  display: "flex",
+                  position: 'absolute',
+                  display: 'flex',
                   // top: headerHeight,
                   width: scrollWidth,
                   height: Math.max(ganttBodyHeight, bodyVisibleHeight),
                   // height: 0,
                   zIndex: 3,
-                  backgroundColor: "white",
+                  backgroundColor: 'white',
                   // pointerEvents: "none",
                 }}
               >
                 {leafHeaderGroup?.headers
                   .filter((header) => !grouping.includes(header.column.id))
-                  .map((header) => {
+                  .map((header, index) => {
                     const date = dayjs(header.id);
-                    const dayNumber = date.get("day");
+                    const dayNumber = date.get('day');
                     const isWeekend = dayNumber === 0 || dayNumber === 6;
-                    const isRest = isHoliday?.(date) || isWeekend;
+                    const isRest = isHoliday ? isHoliday?.(date) : isWeekend;
 
                     const isCurrentDate =
-                      currentAt?.format("YYYY-MM-DD") ===
-                      date.format("YYYY-MM-DD");
+                      currentAt?.format('YYYY-MM-DD') ===
+                      date.format('YYYY-MM-DD');
 
                     return (
                       <div
                         key={header.id}
                         style={{
-                          display: "flex",
-                          justifyContent: "center",
+                          display: 'flex',
+                          justifyContent: 'center',
                           width: header.getSize(),
-                          height: "100%",
+                          height: '100%',
                           // backgroundColor: "red",
-                          borderRight: "1px solid black",
+                          borderRight: '1px solid black',
                           // pointerEvents: "none",
-                          backgroundColor: isRest ? "#acacac60" : "white",
+                          backgroundColor: isRest ? '#acacac60' : 'white',
                           // zIndex: isCurrentDate ?  : -1,
                           zIndex: -1,
-                          position: "relative",
+                          position: 'relative',
                         }}
-                      >
-                        {isCurrentDate && (
-                          <>
-                            <div
-                              style={{
-                                height: "100%",
-                                width: 5,
-                                backgroundColor: "green",
-                              }}
-                            ></div>
-                            <div
-                              style={{
-                                color: "green",
-                                position: "absolute",
-                                left: "100%",
-                              }}
-                            >
-                              this is CurrentDate
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      ></div>
                     );
                   })}
               </div>
@@ -667,19 +960,20 @@ const defaultProps: Partial<VirtualGanttProps> = {
   isWeekStartMonday: true,
   minBarRange: 1,
   headerHeight: [30],
+  showAlert: true,
   headRender: {
     date: (date) => {
       return () => {
-        const day = date.get("day");
-        const dateStr = date.format("D");
+        const day = date.get('day');
+        const dateStr = date.format('D');
         return (
           <div
-            title={date.format("YYYY-MM-DD w")}
+            title={date.format('YYYY-MM-DD w')}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              whiteSpace: "nowrap",
-              padding: "0 5px",
+              display: 'flex',
+              justifyContent: 'space-between',
+              whiteSpace: 'nowrap',
+              padding: '0 5px',
             }}
           >
             <span>{dateStr}</span>
@@ -690,24 +984,26 @@ const defaultProps: Partial<VirtualGanttProps> = {
     },
     month: (date) => {
       return () => {
-        return date.format("YYYY年M月");
+        return date.format('YYYY年M月');
       };
     },
     week: (date, timezone) => {
       return () => {
-        const end = date.add(6, "day");
+        const end = date.add(6, 'day');
         const format =
-          end.get("year") !== date.get("year") ? "YYYY-MM-DD" : "MM-DD";
+          end.get('year') !== date.get('year') ? 'YYYY-MM-DD' : 'MM-DD';
 
         return (
           `${date.locale(timezone).weekYear()}年` +
-          " " +
+          ' ' +
           `${date.locale(timezone).week()}周 ` +
-          `${date.format(format)}~${date.add(6, "day").format(format)}`
+          `${date.format(format)}~${date.add(6, 'day').format(format)}`
         );
       };
     },
   },
 };
 
-VirtualGantt.defaultProps = defaultProps;
+VirtualGanttComponent.defaultProps = defaultProps;
+
+export const VirtualGantt = memo(VirtualGanttComponent);

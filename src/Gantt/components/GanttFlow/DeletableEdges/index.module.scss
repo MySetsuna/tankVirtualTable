@@ -1,0 +1,14 @@
+.deletableIcon {
+  width: 20px;
+  height: 20px;
+  background: #eee;
+  border: 1px solid #000;
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  &:hover {
+    border-color: red;
+    color: red;
+  }
+}

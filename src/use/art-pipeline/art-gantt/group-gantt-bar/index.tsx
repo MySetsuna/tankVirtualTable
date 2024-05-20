@@ -48,12 +48,12 @@ export const GroupGanttBar = memo((props: IProps) => {
     [expands]
   );
 
-  useEffect(() => {
-    row.toggleExpanded(expands.includes(group.id));
-    if (row.groupingColumnId === ART_STORY_GROUP_ID) {
-      //
-    }
-  }, [expands, row, group]);
+  // useEffect(() => {
+  //   row.toggleExpanded(expands.includes(group.id));
+  //   if (row.groupingColumnId === ART_STORY_GROUP_ID) {
+  //     //
+  //   }
+  // }, [expands, row, group]);
 
   return (
     <div
