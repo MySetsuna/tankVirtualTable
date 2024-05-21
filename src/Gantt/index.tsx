@@ -23,6 +23,8 @@ export interface GanttBarData<T = any> {
   index: number;
   hidden: boolean;
   emptyRange: boolean;
+  startAt?: Dayjs;
+  endAt?: Dayjs;
 }
 
 export interface GroupGanttBarData<T, D> extends GanttBarData<T> {

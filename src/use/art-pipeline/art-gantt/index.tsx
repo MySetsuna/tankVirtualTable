@@ -27,12 +27,13 @@ import {
   getGroupedDataSource,
 } from './lib/common';
 import { Resizable } from 're-resizable';
-import { useGanttExpand } from '../gantt-expand-provider';
+import { useGanttUpdater } from '../gantt-updater-provider';
 import { GanttMode } from '../../../Gantt/components/VirtualGantt';
 import { Gantt, GanttNode, GroupOption } from '../../../Gantt';
 import { GroupedTable } from '../../../grouped-table';
 import { ScrollSync, ScrollSyncNode } from 'scroll-sync-react';
 import { isEmpty } from 'lodash';
+import { DateCellRender } from './DateCellRender';
 
 interface IProps {
   readonly tasks: IApiArtTask[];
@@ -81,7 +82,7 @@ export const ArtPipGantt = (props: IProps) => {
     setExpandedModuleIdx,
     _callback,
     setCallback,
-  ] = useGanttExpand();
+  ] = useGanttUpdater();
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<Array<Key>>([]);
 
@@ -141,11 +142,11 @@ export const ArtPipGantt = (props: IProps) => {
   const onBarChange = (
     startAt: dayjs.Dayjs,
     endAt: dayjs.Dayjs,
-    node: GanttNode<IApiArtTask>
+    original: IApiArtTask
   ) => {
     setTasks((tasks) => {
       return tasks.map((task) => {
-        const changeTask = node.data.row.original;
+        const changeTask = original;
         if (task.artTaskId === changeTask.artTaskId) {
           return {
             ...task,
@@ -313,8 +314,9 @@ export const ArtPipGantt = (props: IProps) => {
           scrollSyncClassName="ant-table-body"
           bufferMonths={[2, 2]}
           bufferDay={40}
-          onBarChange={(startAt, endAt, node) => {
-            onBarChange(startAt, endAt, node);
+          DateCellRender={DateCellRender}
+          onBarChange={(startAt, endAt, original) => {
+            onBarChange(startAt, endAt, original);
           }}
           style={{
             position: 'relative',
@@ -329,7 +331,7 @@ export const ArtPipGantt = (props: IProps) => {
                 columns={columns}
                 onHeaderRow={() => {
                   return {
-                    height: headerHeight * 2,
+                    height: headerHeight * 2 + 15,
                   };
                 }}
                 virtual={false}

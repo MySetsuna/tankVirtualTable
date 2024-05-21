@@ -1,7 +1,7 @@
 import { IApiArtStory, IApiArtTask } from '../../../art-task';
 import { debounce } from 'lodash';
 import { Key, memo, useCallback, useEffect } from 'react';
-import { useGanttExpand } from '../../gantt-expand-provider';
+import { useGanttUpdater } from '../../gantt-updater-provider';
 import { ART_STORY_GROUP_ID } from '../lib/common';
 import React from 'react';
 import { BaseGroupHeaderData, GroupGanttBarProps } from '../../../../Gantt';
@@ -20,7 +20,7 @@ export const GroupGanttBar = memo((props: IProps) => {
     expandedModuleIdx,
     setExpandedModuleIdx,
     callback,
-  ] = useGanttExpand();
+  ] = useGanttUpdater();
 
   const setExpand =
     row.groupingColumnId === ART_STORY_GROUP_ID

@@ -35,24 +35,28 @@ const newTask = (index: number, len): IApiArtTask => {
     ])[0]!,
     progress: faker.datatype.number(100),
     effort: faker.datatype.number(10000),
-    startAt: faker.datatype
-      .datetime({
-        max: today.add(1, 'day').valueOf(),
-        min: today.add(-3, 'day').valueOf(),
-      })
-      .toLocaleDateString(),
-    endAt: faker.datatype
-      .datetime({
-        max: today.add(4, 'day').valueOf(),
-        min: today.add(2, 'day').valueOf(),
-      })
-      .toLocaleDateString(),
-    FromDependIds: Array(faker.datatype.number(10))
-      .fill(0)
-      .map(() => faker.datatype.number(len)),
-    ToDependIds: Array(faker.datatype.number(10))
-      .fill(0)
-      .map(() => faker.datatype.number(len)),
+    startAt: '',
+    endAt: '',
+    // startAt: faker.datatype
+    //   .datetime({
+    //     max: today.add(1, 'day').valueOf(),
+    //     min: today.add(-3, 'day').valueOf(),
+    //   })
+    //   .toLocaleDateString(),
+    // endAt: faker.datatype
+    //   .datetime({
+    //     max: today.add(4, 'day').valueOf(),
+    //     min: today.add(2, 'day').valueOf(),
+    //   })
+    //   .toLocaleDateString(),
+    // FromDependIds: Array(faker.datatype.number(10))
+    //   .fill(0)
+    //   .map(() => faker.datatype.number(len)),
+    // ToDependIds: Array(faker.datatype.number(10))
+    //   .fill(0)
+    //   .map(() => faker.datatype.number(len)),
+    FromDependIds: [],
+    ToDependIds: [],
     status: faker.helpers.shuffle<IApiArtTask['status']>([
       'done',
       'working',
@@ -64,7 +68,7 @@ const newTask = (index: number, len): IApiArtTask => {
 const newStory = (index: number, len): IApiArtStory => {
   const today = dayjs();
   return {
-    artStoryId: index,
+    artStoryId: index + 1,
     title: faker.word.verb(),
     artPipId: faker.datatype.number(5),
     status: faker.helpers.shuffle<IApiArtStory['status']>([

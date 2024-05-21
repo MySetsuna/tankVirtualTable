@@ -30,6 +30,7 @@ import {
   GanttHeaderBuilder,
   WEEKDAY_MAP,
   buildGanttHeader,
+  getDateFormX,
   getDayDiff,
   getEdges,
   getIsModeLastDay,
@@ -44,13 +45,14 @@ import { GanttBarProps, GanttNode, GroupOption } from '../..';
 import {
   Connection,
   NodeTypes,
+  OnNodesChange,
   useEdgesState,
   useNodesState,
   useReactFlow,
 } from 'reactflow';
 import { GanttBarBox } from '../GanttBarBox';
 import GanttFlow from '../GanttFlow';
-import { isEmpty, isEqual } from 'lodash';
+import { isEmpty, isEqual, throttle } from 'lodash';
 import ScrollMirror from 'scrollmirror';
 
 dayjs.extend(advancedFormat);
@@ -144,14 +146,16 @@ export type VirtualGanttProps<T extends object = any> = {
     row: Row<T>;
     virtualRow: VirtualItem;
     date: Dayjs;
-    setNodes: React.Dispatch<React.SetStateAction<GanttNode<T>[]>>;
+    originStart?: Dayjs;
     onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
-    buildLeafNode: (
-      row: Row<any>,
-      barStart: Dayjs,
-      barEnd: Dayjs,
+    resizeLeafNode: (
+      rowId: string,
+      width: number,
+      date: Dayjs,
       virtualRow: VirtualItem
-    ) => GanttNode<T>;
+    ) => void;
+    style?: CSSProperties;
+    onClick?: () => void;
   }) => ReactNode;
   minBarRange?: number;
   // barStyle?: CSSProperties | ((row: T, index: number) => CSSProperties);
@@ -275,6 +279,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(
     [] as GanttNode<TData>[]
   );
+
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const [startDate, setStartDate] = useState<Dayjs | undefined>(
@@ -350,67 +355,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     getBarStart,
     getBarEnd,
   ]);
-
-  const buildLeafNode = useCallback(
-    (
-      row: Row<any>,
-      barStart: Dayjs,
-      barEnd: Dayjs,
-      virtualRow: VirtualItem
-    ): GanttNode<any> => {
-      const id = getRowId(row);
-      const height = virtualRow.size;
-      const y = virtualRow.start;
-      const width = (getDayDiff(barEnd, barStart, minBarRange) + 1) * cellWidth;
-      const diff = getDayDiff(
-        barStart ?? barEnd?.add(-1, 'day'),
-        originStart,
-        0
-      );
-
-      return {
-        hidden: !barStart || !barEnd,
-        id: row.groupingColumnId
-          ? `${row.groupingColumnId}:${id}`
-          : `${getLeafRowOriginalId(row)}`,
-        // height,
-        // width,
-        data: {
-          row,
-          fixedY: y,
-          height,
-          width,
-          minWidth: minBarRange * cellWidth,
-          index: virtualRow.index,
-          cellWidth,
-          hidden: !barStart || !barEnd,
-          emptyRange: !barStart && !barEnd,
-        },
-        position: {
-          x: diff * cellWidth,
-          y,
-        },
-        width,
-        height,
-        style: {
-          height,
-          width,
-          cursor: 'grab',
-          visibility: 'visible',
-        },
-        type: 'gantbar',
-      };
-    },
-    [
-      originStart,
-      getBarStart,
-      getBarEnd,
-      cellWidth,
-      minBarRange,
-      getRowId,
-      getLeafRowOriginalId,
-    ]
-  );
 
   useEffect(() => {
     if (startAt && endAt) {
@@ -516,7 +460,75 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     }
   }, [table, isGroupView, grouping]);
 
-  const { rows } = table.getRowModel();
+  const { rows, rowsById } = table.getRowModel();
+
+  const resizeLeafNode = useCallback(
+    (rowId: string, width: number, date: Dayjs, virtualRow: VirtualItem) => {
+      const height = virtualRow.size;
+      const y = virtualRow.start;
+      const diff = getDayDiff(date, originStart, 0);
+      const row = rowsById[rowId];
+
+      if (!row) {
+        throw new Error(`can't find row by id:${rowId}`);
+      }
+      const id = `${getLeafRowOriginalId(row)}`;
+      let startAt: Dayjs | undefined;
+      let endAt: Dayjs | undefined;
+      if (originStart) {
+        const offsetLeft = diff * cellWidth;
+        const offsetRight = offsetLeft + (width ? width - cellWidth : 0);
+        startAt = getDateFormX(offsetLeft, cellWidth, originStart);
+        endAt = getDateFormX(offsetRight, cellWidth, originStart);
+      }
+
+      const newNode: GanttNode<TData> = {
+        hidden: false,
+        id,
+        // height,
+        // width,
+        data: {
+          row,
+          fixedY: y,
+          height,
+          width,
+          minWidth: minBarRange * cellWidth,
+          index: virtualRow.index,
+          cellWidth,
+          hidden: false,
+          emptyRange: false,
+          startAt,
+          endAt: endAt?.isBefore(startAt, 'date') ? startAt : endAt,
+        },
+        position: {
+          x: diff * cellWidth,
+          y,
+        },
+        width,
+        height,
+        style: {
+          height,
+          width,
+          cursor: 'grab',
+          visibility: 'visible',
+        },
+        type: 'gantbar',
+      };
+      setNodes((nds) =>
+        nds.filter((node) => node.id !== newNode.id).concat([newNode])
+      );
+    },
+    [
+      originStart,
+      getBarStart,
+      getBarEnd,
+      cellWidth,
+      minBarRange,
+      getRowId,
+      getLeafRowOriginalId,
+      rows,
+    ]
+  );
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -1067,39 +1079,30 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                         >
                           {rowVirtualizer.getVirtualItems().map((item) => {
                             const row = rows[item.index];
-                            if (
-                              row.groupingColumnId ||
-                              !nodes.find(
-                                ({ id }) => id === getLeafRowOriginalId(row)
-                              )?.data.emptyRange
-                            ) {
-                              return (
-                                <React.Fragment key={row.id}></React.Fragment>
-                              );
-                            }
                             return (
-                              <div
-                                key={row.id}
-                                style={{
-                                  height: item.size,
-                                  cursor: 'pointer',
-                                  width: '100%',
-                                  position: 'absolute',
-                                  transform: `translateY(${item.start}px)`,
-                                }}
-                                onClick={() => onCellClick?.(row, date)}
-                              >
+                              <React.Fragment key={row.id}>
                                 {DateCellRender && (
                                   <DateCellRender
                                     row={row}
                                     virtualRow={item}
                                     date={date}
                                     onBarChange={onBarChange}
-                                    buildLeafNode={buildLeafNode}
-                                    setNodes={setNodes}
+                                    resizeLeafNode={resizeLeafNode}
+                                    originStart={originStart}
+                                    style={{
+                                      height: item.size,
+                                      cursor: 'pointer',
+                                      width: '100%',
+                                      position: 'absolute',
+                                      transform: `translateY(${item.start}px)`,
+                                      background: row.groupingColumnId
+                                        ? 'white'
+                                        : 'pink',
+                                    }}
+                                    onClick={() => onCellClick?.(row, date)}
                                   />
                                 )}
-                              </div>
+                              </React.Fragment>
                             );
                           })}
                         </div>

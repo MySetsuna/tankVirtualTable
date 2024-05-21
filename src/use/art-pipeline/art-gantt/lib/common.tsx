@@ -140,9 +140,10 @@ export const getGroupedDataSource = (
         key: `${ART_GROUP_PREFIX}${ART_STORY_GROUP_ID}:${story.artStoryId}`,
         ...story,
         enableExpand: true,
-        defaultExpand: isDefaultExpandAll
-          ? true
-          : defaultExpandKeys?.includes(story.artStoryId),
+        // defaultExpand: isDefaultExpandAll
+        //   ? true
+        //   : defaultExpandKeys?.includes(story.artStoryId),
+        defaultExpand: false,
         dataSource: groupTask[story.artStoryId] ?? [],
       };
     })
@@ -153,9 +154,7 @@ export const getGroupedDataSource = (
         artStoryId: 0,
         createdAt: '2222-12-12',
         enableExpand: true,
-        defaultExpand: isDefaultExpandAll
-          ? true
-          : defaultExpandKeys?.includes(0),
+        defaultExpand: false,
         dataSource: groupTask['0'] ?? [],
       },
     ] as any[])

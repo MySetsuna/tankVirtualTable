@@ -34,7 +34,7 @@ export const GanttAlert = (props: GanttAlertPropps<IApiArtTask, AlertMap>) => {
   if (GanttAlertType.Normal === type) {
     return null;
   }
- 
+
   return (
     <>
       <Tooltip

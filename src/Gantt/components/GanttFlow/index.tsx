@@ -102,7 +102,6 @@ function GanttFlow(props: GanttFlowProps) {
   const onConnectFn = useCallback(
     (connection: Connection) => {
       const isConnectable = onConnect?.(connection);
-      console.log(isConnectable, 'isConnectable');
 
       if (isConnectable === true) {
         setEdges((eds) => addEdge(connection, eds));
@@ -111,8 +110,6 @@ function GanttFlow(props: GanttFlowProps) {
       if (isConnectable) {
         setEdges((eds) => addEdge(connection, eds));
         isConnectable.then((result) => {
-          console.log(result, 'result');
-
           if (!result) {
             setEdges((eds) =>
               eds.filter(
@@ -136,7 +133,7 @@ function GanttFlow(props: GanttFlowProps) {
           if (change.type === 'dimensions') {
             const changeNode = newNds.find((node) => change.id === node.id);
             if (changeNode) {
-              if (change.resizing === false) {
+              if (change.resizing === false && !changeNode.hidden) {
                 onFitPosWhenResizeEnd(
                   cellWidth,
                   changeNode,

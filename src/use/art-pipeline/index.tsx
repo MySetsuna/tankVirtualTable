@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArtPipGantt } from './art-gantt';
 import { IApiArtPip, IApiArtStory, IApiArtTask } from '.././art-task';
 
-import { GanttExpandProvider } from './gantt-expand-provider';
+import { GanttExpandProvider } from './gantt-updater-provider';
 import React from 'react';
 import { makeArtPip, makeStory, makeTask } from '../../makeData';
 

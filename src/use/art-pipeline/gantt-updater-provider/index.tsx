@@ -3,6 +3,8 @@ import React, {
   ReactNode,
   createContext,
   useContext,
+  useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -22,7 +24,9 @@ const Context = createContext<
           keys?: ((idx: Key[]) => void) | undefined;
           modules?: ((idx: number[]) => void) | undefined;
         }>
-      >
+      >,
+      mouseDownDataRef: React.MutableRefObject<any>,
+      mouseUpDataRef: React.MutableRefObject<any>
     ]
   | undefined
 >(undefined);
@@ -37,6 +41,15 @@ export const GanttExpandProvider = (props: IProps) => {
     modules?: (idx: number[]) => void;
   }>({});
   const [expandModuleIdx, setExpandModuleIdx] = useState<number[]>([]);
+  const mouseDownDataRef = useRef<any>(null);
+  const mouseUpDataRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (mouseDownDataRef.current)
+        document.addEventListener('mouseup', mouseDownDataRef.current.changeFn);
+    };
+  }, []);
   return (
     <Context.Provider
       value={
@@ -47,6 +60,8 @@ export const GanttExpandProvider = (props: IProps) => {
           setExpandModuleIdx,
           callback,
           setCallback,
+          mouseDownDataRef,
+          mouseUpDataRef,
         ] as const
       }
     >
@@ -55,7 +70,7 @@ export const GanttExpandProvider = (props: IProps) => {
   );
 };
 
-export function useGanttExpand() {
+export function useGanttUpdater() {
   const value = useContext(Context);
   if (!value) {
     throw new Error('请在 GanttExpandProvider 中使用 useGanttExpand');

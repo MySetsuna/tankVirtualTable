@@ -307,6 +307,8 @@ groupingValue
         cellWidth,
         hidden: !barStart || !barEnd,
         emptyRange: !barStart && !barEnd,
+        startAt: barStart,
+        endAt: barEnd,
       },
       position: {
         x: diff * cellWidth,
@@ -394,15 +396,15 @@ export const getEdges = <T>(
   return edges;
 };
 
-export const onFitPosWhenResizeEnd = (
+export const onFitPosWhenResizeEnd = <T>(
   cellWidth: number,
-  changedNode: GanttNode<any>,
+  changedNode: GanttNode<T>,
   originStartDate?: Dayjs,
-  callback?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<any>) => void
+  callback?: (startAt: Dayjs, endAt: Dayjs, node: T) => void
 ) => {
   const changeNode = { ...changedNode };
-  let newX = changeNode?.position.x ?? 0;
-  const newY = changeNode?.position.y ?? 0;
+  let newX = changeNode?.position?.x ?? 0;
+  const newY = changeNode?.position?.y ?? 0;
   let newWidth = changeNode?.width ?? 0;
   // const newHeight = changeNode?.height ?? 0;
   const extraX = newX % cellWidth;
