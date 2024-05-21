@@ -88,7 +88,7 @@ export const DateCellRender = (props: IProps) => {
     document.addEventListener('mouseup', mdRef.current.changeFn);
   };
 
-  if (!node || node?.data.emptyRange) {
+  if (node?.data.emptyRange) {
     return (
       <div
         style={style}

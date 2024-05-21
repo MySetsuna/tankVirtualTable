@@ -585,22 +585,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
         !!isGroupView,
         groupOptions
       );
-      setNodes((oldNodes) => {
-        const changes = isEmpty(oldNodes)
-          ? nodes
-          : nodes.map((newNode) => {
-              const oldNode = oldNodes.find(({ id }) => newNode.id === id);
-
-              if (isEqual(oldNode, newNode)) {
-                return oldNode as GanttNode<TData>;
-              }
-              if (oldNode) {
-                return Object.assign(oldNode, newNode);
-              }
-              return newNode as GanttNode<TData>;
-            });
-        return changes;
-      });
+      setNodes(nodes);
     }
   }, [
     originStart,
