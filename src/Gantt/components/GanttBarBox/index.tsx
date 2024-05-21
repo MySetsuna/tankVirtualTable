@@ -41,7 +41,7 @@ export const GanttBarBox = (props: GanttBarBoxProps) => {
             height,
             overflow: 'hidden',
           }}
-          className='gantt-bar77'
+          className="gantt-bar77"
         >
           {row.id}
         </div>

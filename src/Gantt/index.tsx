@@ -21,6 +21,8 @@ export interface GanttBarData<T = any> {
   minWidth: number;
   cellWidth: number;
   index: number;
+  hidden: boolean;
+  emptyRange: boolean;
 }
 
 export interface GroupGanttBarData<T, D> extends GanttBarData<T> {

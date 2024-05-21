@@ -284,6 +284,7 @@ groupingValue
     const barEnd = isGroupRow ? group?.endAt : getBarEnd(row.original);
     const height = virtualRow.size - (isGroupRow ? groupGap : 0);
     const y = virtualRow.start + (isGroupRow ? groupGap : 0);
+
     const width = (getDayDiff(barEnd, barStart, minBarRange) + 1) * cellWidth;
     const diff = getDayDiff(barStart ?? barEnd?.add(-1, 'day'), originStart, 0);
 
@@ -304,6 +305,8 @@ groupingValue
         minWidth: minBarRange * cellWidth,
         index: virtualRow.index,
         cellWidth,
+        hidden: !barStart || !barEnd,
+        emptyRange: !barStart && !barEnd,
       },
       position: {
         x: diff * cellWidth,
@@ -425,7 +428,7 @@ export const onFitPosWhenResizeEnd = (
     const offsetRight = offsetLeft + (newWidth ? newWidth - cellWidth : 0);
     const startAt = getDateFormX(offsetLeft, cellWidth, originStartDate);
     const endAt = getDateFormX(offsetRight, cellWidth, originStartDate);
-    callback?.(startAt, endAt, changeNode);
+    callback?.(startAt, endAt, changeNode.data.row.original);
   }
 };
 export const getIsModeLastDay = (

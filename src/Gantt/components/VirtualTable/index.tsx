@@ -102,8 +102,8 @@ export const VirtualTable = (props: VirtualTableProps) => {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const row = rows[index];
+    estimateSize: () => {
+      // const row = rows[index];
       return rowHeight;
     },
     overscan: 10,
@@ -134,14 +134,14 @@ export const VirtualTable = (props: VirtualTableProps) => {
       style={style}
     >
       <div
-        className='gantt-scroll-container'
+        className="gantt-scroll-container"
         style={{
           height: scrollHeight,
           width: scrollWidth,
         }}
       >
         <div
-          className='table-header'
+          className="table-header"
           style={{
             display: 'flex',
             position: 'sticky',
@@ -194,7 +194,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
           ))}
         </div>
         <div
-          className='table-body'
+          className="table-body"
           style={{
             position: 'absolute',
             display: 'flex',
@@ -232,8 +232,9 @@ export const VirtualTable = (props: VirtualTableProps) => {
                   const context = cell.getContext();
                   const cellValue = context.getValue();
                   let content;
-                  let width = cell.column.columnDef.size ?? virtualColumn.size;
-                  let style: React.CSSProperties = {
+                  const width =
+                    cell.column.columnDef.size ?? virtualColumn.size;
+                  const style: React.CSSProperties = {
                     position: 'absolute',
                     // top: 0,
                     // left: 0,
@@ -263,7 +264,7 @@ export const VirtualTable = (props: VirtualTableProps) => {
                           ])
                         }
                       >
-                        {content}
+                        {/* {content} */}
                       </div>
                     );
                   }

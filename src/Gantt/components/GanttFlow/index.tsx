@@ -5,11 +5,14 @@ import ReactFlow, {
   Edge,
   EdgeProps,
   MarkerType,
+  Node,
   NodeChange,
   NodeTypes,
   OnEdgesChange,
   addEdge,
   applyNodeChanges,
+  getOutgoers,
+  useReactFlow,
   // applyEdgeChanges,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -30,9 +33,9 @@ type GanttFlowProps<T = any> = {
   setEdges: React.Dispatch<React.SetStateAction<Edge<any>[]>>;
   originStartDate?: Dayjs;
   onEdgesChange: OnEdgesChange;
-  onBarChange?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<T>) => void;
+  onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
   onDisConnect?: (from: string, to: string) => void;
-  onConnect?: (connection: Connection) => void;
+  onConnect?: (connection: Connection) => boolean | Promise<boolean>;
   renderEdgeDeleteTitle?: (props: {
     form: GanttNode<any>;
     to: GanttNode<any>;
@@ -58,6 +61,32 @@ function GanttFlow(props: GanttFlowProps) {
 
   // const updateNodeInternals = useUpdateNodeInternals();
 
+  const { getNodes, getEdges } = useReactFlow();
+
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      // we are using getNodes and getEdges helpers here
+      // to make sure we create isValidConnection function only once
+      const nodes = getNodes();
+      const edges = getEdges();
+      const target = nodes.find((node) => node.id === connection.target);
+      const hasCycle = (node: Node<any>, visited = new Set()) => {
+        if (visited.has(node.id)) return false;
+
+        visited.add(node.id);
+
+        for (const outgoer of getOutgoers(node, nodes, edges)) {
+          if (outgoer.id === connection.source) return true;
+          if (hasCycle(outgoer, visited)) return true;
+        }
+      };
+
+      if (target?.id === connection.source) return false;
+      return !hasCycle(target!);
+    },
+    [getNodes, getEdges]
+  );
+
   const edgeTypes = useMemo(() => {
     return {
       'deletable-smoothstep': (props: EdgeProps) => (
@@ -72,8 +101,29 @@ function GanttFlow(props: GanttFlowProps) {
 
   const onConnectFn = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge(connection, eds));
-      onConnect?.(connection);
+      const isConnectable = onConnect?.(connection);
+      console.log(isConnectable, 'isConnectable');
+
+      if (isConnectable === true) {
+        setEdges((eds) => addEdge(connection, eds));
+        return;
+      }
+      if (isConnectable) {
+        setEdges((eds) => addEdge(connection, eds));
+        isConnectable.then((result) => {
+          console.log(result, 'result');
+
+          if (!result) {
+            setEdges((eds) =>
+              eds.filter(
+                (edge) =>
+                  edge.target !== connection.target &&
+                  edge.source !== connection.source
+              )
+            );
+          }
+        });
+      }
     },
     [setEdges, onConnect]
   );
@@ -151,7 +201,7 @@ function GanttFlow(props: GanttFlowProps) {
             (changeNode?.width ? changeNode?.width - cellWidth : -0);
           const startAt = getDateFormX(offsetLeft, cellWidth, originStartDate);
           const endAt = getDateFormX(offsetRight, cellWidth, originStartDate);
-          onBarChange?.(startAt, endAt, newChangeNode);
+          onBarChange?.(startAt, endAt, newChangeNode.data.row.original);
         }
 
         setNodes((nodes) => {
@@ -243,6 +293,7 @@ function GanttFlow(props: GanttFlowProps) {
       autoPanOnNodeDrag={false}
       autoPanOnConnect={false}
       panActivationKeyCode={null}
+      isValidConnection={isValidConnection}
     >
       {children}
     </ReactFlow>

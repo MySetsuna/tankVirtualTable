@@ -9,7 +9,7 @@ import {
   getGroupedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { VirtualItem, useVirtualizer } from '@tanstack/react-virtual';
 import React, {
   CSSProperties,
   HTMLAttributes,
@@ -100,16 +100,18 @@ export enum BaseGanttAlertType {
   conflict = 'conflict',
 }
 
-export type GanttAlertPropps<T = any, AM = unknown> = {
+export type GanttAlertProps<T = any, AM = unknown, P = any> = {
   type: string;
   date: Dayjs;
+  start?: Dayjs;
+  end?: Dayjs;
   rows: Row<T>[];
   alertMap: AM;
-  params: string[];
+  params: P;
 };
 
 export interface GanttAlertOptions<T = any, AM = any, TY = any, P = any> {
-  component?: (props: GanttAlertPropps<T, AM>) => ReactNode;
+  component?: (props: GanttAlertProps<T, AM>) => ReactNode;
   elementProps?: HTMLAttributes<HTMLDivElement>;
   modeLastDayBorder?: CSSProperties['border'];
   getAlertMap: (start: Dayjs, end: Dayjs, rows: Row<T>[], params: P) => AM;
@@ -137,6 +139,20 @@ export type VirtualGanttProps<T extends object = any> = {
   getFromLinkIds: (row: T) => Key[];
   getRowId: (row: Row<T>) => string;
   getLeafRowOriginalId: (row: Row<T>) => string;
+  onCellClick?: (row: Row<T>, date: Dayjs) => void;
+  DateCellRender?: (props: {
+    row: Row<T>;
+    virtualRow: VirtualItem;
+    date: Dayjs;
+    setNodes: React.Dispatch<React.SetStateAction<GanttNode<T>[]>>;
+    onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
+    buildLeafNode: (
+      row: Row<any>,
+      barStart: Dayjs,
+      barEnd: Dayjs,
+      virtualRow: VirtualItem
+    ) => GanttNode<T>;
+  }) => ReactNode;
   minBarRange?: number;
   // barStyle?: CSSProperties | ((row: T, index: number) => CSSProperties);
   // barClassName?: string | ((row: T, index: number) => string);
@@ -152,9 +168,9 @@ export type VirtualGanttProps<T extends object = any> = {
   scrollSyncElement?: Element[] | NodeListOf<Element>;
   scrollSyncElementQuery?: string;
   scrollSyncClassName: string;
-  onBarChange?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<T>) => void;
+  onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
   onDisConnect?: (from: string, to: string) => void;
-  onConnect?: (connection: Connection) => void;
+  onConnect?: (connection: Connection) => boolean | Promise<boolean>;
   renderEdgeDeleteTitle?: (props: {
     form: GanttNode<any>;
     to: GanttNode<any>;
@@ -225,7 +241,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     isGroupView,
     getBarStart,
     getBarEnd,
-    getToLinkIds,
+    // getToLinkIds,
     getFromLinkIds,
     getRowId,
     GanttBar,
@@ -238,6 +254,8 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     onDisConnect,
     onConnect,
     getLeafRowOriginalId,
+    onCellClick,
+    DateCellRender,
     ganttExpanded,
     renderEdgeDeleteTitle,
     getCustomModeLastDay,
@@ -332,6 +350,67 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     getBarStart,
     getBarEnd,
   ]);
+
+  const buildLeafNode = useCallback(
+    (
+      row: Row<any>,
+      barStart: Dayjs,
+      barEnd: Dayjs,
+      virtualRow: VirtualItem
+    ): GanttNode<any> => {
+      const id = getRowId(row);
+      const height = virtualRow.size;
+      const y = virtualRow.start;
+      const width = (getDayDiff(barEnd, barStart, minBarRange) + 1) * cellWidth;
+      const diff = getDayDiff(
+        barStart ?? barEnd?.add(-1, 'day'),
+        originStart,
+        0
+      );
+
+      return {
+        hidden: !barStart || !barEnd,
+        id: row.groupingColumnId
+          ? `${row.groupingColumnId}:${id}`
+          : `${getLeafRowOriginalId(row)}`,
+        // height,
+        // width,
+        data: {
+          row,
+          fixedY: y,
+          height,
+          width,
+          minWidth: minBarRange * cellWidth,
+          index: virtualRow.index,
+          cellWidth,
+          hidden: !barStart || !barEnd,
+          emptyRange: !barStart && !barEnd,
+        },
+        position: {
+          x: diff * cellWidth,
+          y,
+        },
+        width,
+        height,
+        style: {
+          height,
+          width,
+          cursor: 'grab',
+          visibility: 'visible',
+        },
+        type: 'gantbar',
+      };
+    },
+    [
+      originStart,
+      getBarStart,
+      getBarEnd,
+      cellWidth,
+      minBarRange,
+      getRowId,
+      getLeafRowOriginalId,
+    ]
+  );
 
   useEffect(() => {
     if (startAt && endAt) {
@@ -745,7 +824,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               >
                 {leafHeaderGroup?.headers
                   .filter((header) => !grouping.includes(header.column.id))
-                  .map((header, index) => {
+                  .map((header) => {
                     const date = dayjs(header.id);
 
                     const isCurrentDate =
@@ -762,10 +841,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                       headerHeightOps?.[0] ||
                       rowHeight;
 
-                    const dayLineHeight = Math.max(
-                      ganttBodyHeight,
-                      bodyVisibleHeight
-                    );
+                    const dayLineHeight = dayLineTop + alertHeight;
 
                     const type = alertOptions?.getAlertType(
                       date,
@@ -814,13 +890,15 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                             rows={rows}
                             alertMap={alertMap}
                             params={params}
+                            start={startDate}
+                            end={endDate}
                           />
                         )}
                         {isCurrentDate && (
                           <>
                             <div
                               style={{
-                                height: dayLineHeight,
+                                height: '100%',
                                 width: 5,
                                 backgroundColor: 'transparent',
                                 position: 'absolute',
@@ -843,7 +921,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                               ></div>
                               <div
                                 style={{
-                                  height: '100%',
+                                  height: dayLineHeight,
                                   width: 2,
                                   backgroundColor: '#5764F0',
                                   position: 'absolute',
@@ -913,11 +991,15 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               >
                 {leafHeaderGroup?.headers
                   .filter((header) => !grouping.includes(header.column.id))
-                  .map((header, index) => {
+                  .map((header, index, arr) => {
                     const date = dayjs(header.id);
                     const dayNumber = date.get('day');
                     const isWeekend = dayNumber === 0 || dayNumber === 6;
                     const isRest = isHoliday ? isHoliday?.(date) : isWeekend;
+                    const dayLineHeight = Math.max(
+                      ganttBodyHeight,
+                      bodyVisibleHeight
+                    );
 
                     const isCurrentDate =
                       currentAt?.format('YYYY-MM-DD') ===
@@ -932,14 +1014,96 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                           width: header.getSize(),
                           height: '100%',
                           // backgroundColor: 'red',
-                          borderRight: '1px solid black',
+                          borderRight: '1px solid #CDD6E4',
                           // pointerEvents: 'none',
-                          backgroundColor: isRest ? '#acacac60' : 'white',
+                          backgroundColor: isRest ? '#F0F3F9;' : 'white',
                           // zIndex: isCurrentDate ?  : -1,
-                          zIndex: -1,
+                          zIndex: arr.length - index,
                           position: 'relative',
                         }}
-                      ></div>
+                      >
+                        {isCurrentDate && (
+                          <>
+                            <div
+                              style={{
+                                height: dayLineHeight,
+                                width: 5,
+                                backgroundColor: 'transparent',
+                                position: 'absolute',
+                                top: 0,
+                                display: 'flex',
+                                justifyContent: 'start',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                cursor: 'pointer',
+                                zIndex: 1,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: '100%',
+                                  width: 2,
+                                  backgroundColor: '#5764F0',
+                                  position: 'absolute',
+                                  display: 'flex',
+                                  justifyContent: 'start',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                }}
+                              ></div>
+                            </div>
+                            <div
+                              style={{
+                                color: 'lightblue',
+                                position: 'absolute',
+                                left: '100%',
+                              }}
+                            ></div>
+                          </>
+                        )}
+                        <div
+                          className="cell-handler"
+                          style={{ height: '100%', width: '100%', zIndex: 0 }}
+                        >
+                          {rowVirtualizer.getVirtualItems().map((item) => {
+                            const row = rows[item.index];
+                            if (
+                              row.groupingColumnId ||
+                              !nodes.find(
+                                ({ id }) => id === getLeafRowOriginalId(row)
+                              )?.data.emptyRange
+                            ) {
+                              return (
+                                <React.Fragment key={row.id}></React.Fragment>
+                              );
+                            }
+                            return (
+                              <div
+                                key={row.id}
+                                style={{
+                                  height: item.size,
+                                  cursor: 'pointer',
+                                  width: '100%',
+                                  position: 'absolute',
+                                  transform: `translateY(${item.start}px)`,
+                                }}
+                                onClick={() => onCellClick?.(row, date)}
+                              >
+                                {DateCellRender && (
+                                  <DateCellRender
+                                    row={row}
+                                    virtualRow={item}
+                                    date={date}
+                                    onBarChange={onBarChange}
+                                    buildLeafNode={buildLeafNode}
+                                    setNodes={setNodes}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
               </div>

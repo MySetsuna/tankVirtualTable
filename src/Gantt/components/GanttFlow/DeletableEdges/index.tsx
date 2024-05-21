@@ -84,7 +84,7 @@ export default function DeletableEdges(
             // if you have an interactive element, set pointer-events: all
             pointerEvents: 'all',
           }}
-          className='nodrag nopan'
+          className="nodrag nopan"
         >
           <Tooltip
             title={
@@ -93,7 +93,7 @@ export default function DeletableEdges(
           >
             <button
               className={styles.deletableIcon}
-              style={{ opacity: data?.isHovered ? 1 : 0 }}
+              style={{ opacity: data?.isHovered || isDeleteHovered ? 1 : 0 }}
               onClick={onEdgeClick}
               onMouseLeave={() => setIsDeleteOvered(false)}
               onMouseOver={() => setIsDeleteOvered(true)}
