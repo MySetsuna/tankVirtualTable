@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
 import { ArtPipGantt } from './art-gantt';
-import { IApiArtPip, IApiArtStory, IApiArtTask } from '.././art-task';
-
-import { GanttExpandProvider } from './gantt-updater-provider';
-import React from 'react';
-import { makeArtPip, makeStory, makeTask } from '../../makeData';
+import {
+  IApiArtPip,
+  IApiArtStory,
+  IApiArtTask,
+} from '@/model/pmstation/api-modules/art-task';
+import {
+  apiEditPip,
+  apiGetListStory,
+  apiGetListTask,
+  apiListPip,
+} from '@/api/pmstation/art-task';
+import { useParams } from 'react-router-dom';
+import { IProjectCommonPathParams } from '@/model';
+import { GanttUpdaterProvider } from './gantt-updater-provider';
+import { getDefaultWorkCalendarDetail } from '@/store/pmstation/modules/work-calendar/actions';
+import { useTapdAuthInfo } from '@/store/pmstation/modules/project/hooks';
+import { apiGetTapdRoles, apiGetTapdUsers } from '@/api';
 
 export const ArtPipeline = () => {
   const [newPipName, setNewPipName] = useState<string>('');
@@ -12,11 +24,45 @@ export const ArtPipeline = () => {
   const [tasks, setTasks] = useState<IApiArtTask[]>([]);
   const [stories, setStories] = useState<IApiArtStory[]>([]);
   const [artPip, setArtPip] = useState<IApiArtPip | undefined>();
+  const { projectId } = useParams<IProjectCommonPathParams>();
   const [isGroupView, setIsGroupView] = useState<boolean>(true);
   const [groupStr, setGroupStr] = useState<string>('');
+  const [userRoles, setUserRoles] = useState<
+    {
+      user: string;
+      role: string;
+    }[]
+  >([]);
+
+  const { tapdAuthInfo } = useTapdAuthInfo();
+
+  const fetchTapdUserRoleMap = async (id: string) => {
+    const users = await apiGetTapdUsers(id);
+    const roles = await apiGetTapdRoles(id);
+    let userRoles: {
+      user: string;
+      role: string;
+    }[] = [];
+    if (roles && users) {
+      userRoles = users
+        ?.map((user) => {
+          return user.UserWorkspace.role_id.map((roleId) => {
+            return { user: user.UserWorkspace.user, role: roles[roleId] };
+          });
+        })
+        .flat();
+    }
+    setUserRoles(userRoles);
+  };
+
+  useEffect(() => {
+    if (tapdAuthInfo) {
+      fetchTapdUserRoleMap(tapdAuthInfo.workspace_id);
+    }
+  }, [tapdAuthInfo?.workspace_id, tapdAuthInfo]);
 
   const fetchPips = async () => {
-    const result = await makeArtPip(5);
+    const result = await apiListPip(projectId);
     if (result) {
       setPipList(result);
       if (result.length) setArtPip(result[0]);
@@ -24,18 +70,16 @@ export const ArtPipeline = () => {
   };
 
   const fetchTasks = async (artPipId: number) => {
-    const result = await makeTask(50).sort(
-      (a, b) => a.artStoryId - b.artStoryId
-    );
-    if (result) {
-      setTasks(result.slice());
+    const result = await apiGetListTask({ artPipId, page: 1, pageSize: 9999 });
+    if (result?.artTasks) {
+      setTasks(result.artTasks.slice());
     }
   };
 
   const fetchStory = async (artPipId: number) => {
-    const result = await makeStory(20);
-    if (result) {
-      setStories(result.slice());
+    const result = await apiGetListStory({ artPipId, page: 1, pageSize: 9999 });
+    if (result?.artStories) {
+      setStories(result.artStories.slice());
     }
   };
 
@@ -48,16 +92,16 @@ export const ArtPipeline = () => {
   config: string;
   fatherId: number;
      */
-    // const result = await apiEditPip({
-    //   projectId,
-    //   name: newPipName,
-    //   category: '',
-    //   config: '',
-    // });
-    // if (result?.artPipId) {
-    //   setNewPipName('');
-    //   fetchPips();
-    // }
+    const result = await apiEditPip({
+      projectId,
+      name: newPipName,
+      category: '',
+      config: '',
+    });
+    if (result?.artPipId) {
+      setNewPipName('');
+      fetchPips();
+    }
   };
 
   useEffect(() => {
@@ -68,27 +112,22 @@ export const ArtPipeline = () => {
   }, [artPip, artPip?.artPipId]);
 
   useEffect(() => {
-    fetchPips();
-  }, []);
+    if (projectId) fetchPips();
+  }, [projectId]);
+
+  useEffect(() => {
+    getDefaultWorkCalendarDetail({ projectId });
+  }, [projectId]);
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
-      <div
-        style={{
-          width: 300,
-          padding: 10,
-          flexShrink: 0,
-          background: '##2f2f2f',
-          height: '100vh',
-          overflow: 'auto',
-        }}
-      >
+      <div style={{ width: 300, flex: 0, padding: 10, background: '##2f2f2f' }}>
         <input
           value={newPipName}
           onChange={(event) => setNewPipName(event.target.value)}
         />
         <button onClick={() => onCreate()}>创建美术看板</button>
-        <div className='pip-list'>
+        <div className="pip-list">
           {pipList.map((pip) => {
             return (
               <div
@@ -113,22 +152,25 @@ export const ArtPipeline = () => {
             {isGroupView ? '取消分组' : '确定分组'}
           </button>
         </div>
-        <GanttExpandProvider>
+        <GanttUpdaterProvider>
           <ArtPipGantt
+            users={['jxk', 'j', 'x', 'k', 'v_jxkjiang']}
+            userRoles={userRoles}
             isGroupView={isGroupView}
             tasks={tasks}
             stories={stories}
             artPip={artPip}
-            setTasks={setTasks}
             onListChange={() => {
               if (artPip) {
                 fetchTasks(artPip.artPipId);
                 fetchStory(artPip.artPipId);
               }
             }}
+            setTasks={setTasks}
+            setStories={setStories}
             grouping={groupStr.split(',') as (keyof IApiArtTask)[]}
           />
-        </GanttExpandProvider>
+        </GanttUpdaterProvider>
       </div>
     </div>
   );

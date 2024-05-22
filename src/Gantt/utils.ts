@@ -396,15 +396,15 @@ export const getEdges = <T>(
   return edges;
 };
 
-export const onFitPosWhenResizeEnd = <T>(
+export const onFitPosWhenResizeEnd = (
   cellWidth: number,
-  changedNode: GanttNode<T>,
+  changedNode: GanttNode<any>,
   originStartDate?: Dayjs,
-  callback?: (startAt: Dayjs, endAt: Dayjs, node: T) => void
+  callback?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<any>) => void
 ) => {
   const changeNode = { ...changedNode };
-  let newX = changeNode?.position?.x ?? 0;
-  const newY = changeNode?.position?.y ?? 0;
+  let newX = changeNode?.position.x ?? 0;
+  const newY = changeNode?.position.y ?? 0;
   let newWidth = changeNode?.width ?? 0;
   // const newHeight = changeNode?.height ?? 0;
   const extraX = newX % cellWidth;

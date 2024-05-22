@@ -44,6 +44,7 @@ export default function DeletableEdges(
     targetX,
     targetY,
     targetPosition,
+    borderRadius: 8,
   });
   const [isDeleteHovered, setIsDeleteOvered] = useState<boolean>(false);
 
@@ -56,23 +57,17 @@ export default function DeletableEdges(
 
   return (
     <>
-      <Tooltip
-        title={
-          !!DeleteTitle ? <DeleteTitle form={fromNode} to={toNode} /> : null
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={
+          data?.isHovered
+            ? isDeleteHovered
+              ? { ...style, stroke: 'red', zIndex: 99999 }
+              : { ...style, stroke: 'blue', zIndex: 99999 }
+            : style
         }
-      >
-        <BaseEdge
-          path={edgePath}
-          markerEnd={markerEnd}
-          style={
-            data?.isHovered
-              ? isDeleteHovered
-                ? { ...style, stroke: 'red', zIndex: 99999 }
-                : { ...style, stroke: 'blue', zIndex: 99999 }
-              : style
-          }
-        />
-      </Tooltip>
+      />
       <EdgeLabelRenderer>
         <div
           style={{

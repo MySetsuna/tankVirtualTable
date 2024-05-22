@@ -33,7 +33,7 @@ type GanttFlowProps<T = any> = {
   setEdges: React.Dispatch<React.SetStateAction<Edge<any>[]>>;
   originStartDate?: Dayjs;
   onEdgesChange: OnEdgesChange;
-  onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
+  onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: GanttNode<T>) => void;
   onDisConnect?: (from: string, to: string) => void;
   onConnect?: (connection: Connection) => boolean | Promise<boolean>;
   renderEdgeDeleteTitle?: (props: {
@@ -102,6 +102,7 @@ function GanttFlow(props: GanttFlowProps) {
   const onConnectFn = useCallback(
     (connection: Connection) => {
       const isConnectable = onConnect?.(connection);
+      console.log(isConnectable, 'isConnectable');
 
       if (isConnectable === true) {
         setEdges((eds) => addEdge(connection, eds));
@@ -110,6 +111,8 @@ function GanttFlow(props: GanttFlowProps) {
       if (isConnectable) {
         setEdges((eds) => addEdge(connection, eds));
         isConnectable.then((result) => {
+          console.log(result, 'result');
+
           if (!result) {
             setEdges((eds) =>
               eds.filter(
@@ -133,7 +136,7 @@ function GanttFlow(props: GanttFlowProps) {
           if (change.type === 'dimensions') {
             const changeNode = newNds.find((node) => change.id === node.id);
             if (changeNode) {
-              if (change.resizing === false && !changeNode.hidden) {
+              if (change.resizing === false) {
                 onFitPosWhenResizeEnd(
                   cellWidth,
                   changeNode,
@@ -198,7 +201,7 @@ function GanttFlow(props: GanttFlowProps) {
             (changeNode?.width ? changeNode?.width - cellWidth : -0);
           const startAt = getDateFormX(offsetLeft, cellWidth, originStartDate);
           const endAt = getDateFormX(offsetRight, cellWidth, originStartDate);
-          onBarChange?.(startAt, endAt, newChangeNode.data.row.original);
+          onBarChange?.(startAt, endAt, newChangeNode);
         }
 
         setNodes((nodes) => {

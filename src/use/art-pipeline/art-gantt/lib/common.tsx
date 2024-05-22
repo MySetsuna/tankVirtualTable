@@ -1,17 +1,22 @@
-import { IApiArtStory, IApiArtTask } from '../../../art-task';
+import { GroupOption } from '@/components/Gantt';
+import { ITableDataItem } from '@/components/grouped-table/model';
+import {
+  IApiArtStory,
+  IApiArtTask,
+} from '@/model/pmstation/api-modules/art-task';
 import { TrademarkCircleOutlined } from '@ant-design/icons';
 import { groupBy } from 'lodash';
 import { FixedType } from 'rc-table/lib/interface';
 import { Key } from 'react';
 import { Row } from '@tanstack/react-table';
 import dayjs, { Dayjs } from 'dayjs';
+import { getStartAndEnd } from '@/components/Gantt/utils';
 import { GroupGanttBar } from '../group-gantt-bar';
-import React from 'react';
-import { ITableDataItem } from '../../../../grouped-table/model';
-import { GroupOption } from '../../../../Gantt';
-import { getStartAndEnd } from '../../../../Gantt/utils';
-import { GanttAlertOptions } from '../../../../Gantt/components/VirtualGantt';
-import { getBarEnd, getBarStart } from '../../../use-lib';
+import { getBarEnd, getBarStart, isDateBetween } from './utils';
+import {
+  AnyObject,
+  GanttAlertOptions,
+} from '@/components/Gantt/components/VirtualGantt';
 import { GanttAlert } from '../gantt-alert';
 
 export enum StoryStatus {
@@ -24,7 +29,6 @@ export enum GanttAlertType {
   UnAvailable = 'UnAvailable',
   Normal = 'Normal',
 }
-
 export const getDefaultColumns = () => {
   return [
     {
@@ -59,6 +63,15 @@ export const getDefaultColumns = () => {
     {
       dataIndex: 'endAt',
       title: '结束时间',
+      width: 100,
+      render: (text: string) => {
+        return text;
+      },
+      ellipsis: true,
+    },
+    {
+      dataIndex: 'effort',
+      title: '工时人天',
       width: 100,
       render: (text: string) => {
         return text;
@@ -140,10 +153,9 @@ export const getGroupedDataSource = (
         key: `${ART_GROUP_PREFIX}${ART_STORY_GROUP_ID}:${story.artStoryId}`,
         ...story,
         enableExpand: true,
-        // defaultExpand: isDefaultExpandAll
-        //   ? true
-        //   : defaultExpandKeys?.includes(story.artStoryId),
-        defaultExpand: false,
+        defaultExpand: isDefaultExpandAll
+          ? true
+          : defaultExpandKeys?.includes(story.artStoryId),
         dataSource: groupTask[story.artStoryId] ?? [],
       };
     })
@@ -154,7 +166,9 @@ export const getGroupedDataSource = (
         artStoryId: 0,
         createdAt: '2222-12-12',
         enableExpand: true,
-        defaultExpand: false,
+        defaultExpand: isDefaultExpandAll
+          ? true
+          : defaultExpandKeys?.includes(0),
         dataSource: groupTask['0'] ?? [],
       },
     ] as any[])
@@ -176,21 +190,6 @@ export const getGanttDataSource = (
     .sort((a, b) => a.artStoryId - b.artStoryId);
 };
 
-export const isDateBetween = (
-  date: Dayjs,
-  start?: Dayjs,
-  end?: Dayjs,
-  defaultValue = false
-) => {
-  if (!end || !start) {
-    return defaultValue;
-  }
-  return (
-    (date.isSame(start, 'date') || date.isAfter(start, 'date')) &&
-    (date.isSame(end, 'date') || date.isBefore(end, 'date'))
-  );
-};
-
 type DayAlertMap = {
   user: {
     [user: string]: GanttAlertType;
@@ -199,20 +198,27 @@ type DayAlertMap = {
   type: GanttAlertType;
 };
 
+export type UserRole = {
+  user: string;
+  role: string;
+};
+
 export type AlertMap = {
   [date: string]: DayAlertMap;
 };
 
 export const getAlertOptions = (
   users: string[],
-  tasks: IApiArtTask[]
-): GanttAlertOptions<IApiArtTask, AlertMap, GanttAlertType, string[]> => {
+  tasks: IApiArtTask[],
+  userRoles: UserRole[]
+): GanttAlertOptions<
+  IApiArtTask,
+  AlertMap,
+  GanttAlertType,
+  { userRoles: UserRole[]; users: string[] }
+> => {
   return {
-    getAlertMap: (
-      start: Dayjs,
-      end: Dayjs,
-      _rows: Row<IApiArtTask>[]
-    ): AlertMap => {
+    getAlertMap: (start: Dayjs, end: Dayjs): AlertMap => {
       const alertMap: AlertMap = {};
       const defaultUserAlertMap = users.reduce((map, user) => {
         return Object.assign(map, { [user]: GanttAlertType.Available });
@@ -232,10 +238,10 @@ export const getAlertOptions = (
           return isDateBetween(current, getBarStart(task), getBarEnd(task));
         });
         const usersSet = new Set<string>();
-        let preTaskIdMap = {};
+        const preTaskIdMap: AnyObject = {};
         currentMatchedTasks.forEach((task) => {
-          const handler = task.handler;
-
+          const { handler } = task;
+          if (!handler) return;
           if (
             !Reflect.has(dateAlertMap.user, handler) ||
             dateAlertMap.user[handler] === GanttAlertType.Available
@@ -277,7 +283,7 @@ export const getAlertOptions = (
       return data[date.format('YYYY-MM-DD')]?.type ?? GanttAlertType.Normal;
     },
     component: GanttAlert,
-    params: users,
+    params: { userRoles, users },
     modeLastDayBorder: '#CDD6E4 solid 1px',
     typeElemetPropsMap: {
       [GanttAlertType.Available]: { style: { background: '#4ABE79' } },
@@ -291,7 +297,12 @@ export const getAlertOptions = (
   };
 };
 
-export const mergeDate = (days: Dayjs[]) => {
+export const mergeDate = (
+  days: Dayjs[],
+  today: Dayjs,
+  start?: Dayjs,
+  end?: Dayjs
+) => {
   const sortedDays = days.slice().sort((a, b) => a.valueOf() - b.valueOf());
   const dayMerges: [Dayjs, Dayjs][] = [];
   let len = 0;
@@ -310,49 +321,75 @@ export const mergeDate = (days: Dayjs[]) => {
       return;
     }
   });
-  return dayMerges.map((merge) =>
-    merge.map((date) => date.format('YYYY-MM-DD')).join('~')
-  );
+  return dayMerges
+    .filter(([start, end]) => {
+      return isDateBetween(today, start, end);
+    })
+    .map((merge) => {
+      if (merge[0].isSame(merge[1], 'date')) {
+        return merge[0].format('YYYY-MM-DD');
+      }
+      if (merge[0].isSame(start, 'date')) {
+        return `*~${merge[1].format('YYYY-MM-DD')}`;
+      }
+      if (merge[1].isSame(end, 'date')) {
+        return `${merge[0].format('YYYY-MM-DD')}~*`;
+      }
+      return merge.map((date) => date.format('YYYY-MM-DD')).join('~');
+    });
 };
 
 export const buildNearAvailableAlertData = (
   date: Dayjs,
   alertMap: AlertMap,
-  users: string[]
+  users: string[],
+  userRoles: UserRole[],
+  alertType: GanttAlertType,
+  start?: Dayjs,
+  end?: Dayjs
 ) => {
+  const userRoleGroup = groupBy(userRoles, 'user');
   let curDayFmtStr = date.format('YYYY-MM-DD');
+  const todayFmtStr = date.format('YYYY-MM-DD');
   let diff = 0;
-  const userDateMap = users.reduce(
+  const userDateMap = users.reduce<{ [user: string]: Dayjs[] }>(
     (map, user) => ({ ...map, [user]: [] }),
-    {} as { [user: string]: Dayjs[] }
+    {}
   );
-  while (alertMap[curDayFmtStr]?.type === GanttAlertType.Available) {
+  while (alertMap[curDayFmtStr]?.type === alertType) {
+    const curDate = dayjs(curDayFmtStr);
     Object.entries(alertMap[curDayFmtStr].user)
-      .filter(([, type]) => type === GanttAlertType.Available)
+      .filter(([, type]) => type === alertType)
       .forEach(([user]) => {
-        userDateMap[user].push(dayjs(curDayFmtStr));
+        userDateMap[user].push(curDate);
       });
-    diff++;
+    diff += 1;
     curDayFmtStr = date.add(diff, 'day').format('YYYY-MM-DD');
   }
   diff = -1;
   curDayFmtStr = date.add(diff, 'day').format('YYYY-MM-DD');
-  console.log(curDayFmtStr, 'curDayFmtStr', alertMap[curDayFmtStr]);
-  while (alertMap[curDayFmtStr]?.type === GanttAlertType.Available) {
-    console.log(curDayFmtStr, 'curDayFmtStr');
-
+  while (alertMap[curDayFmtStr]?.type === alertType) {
+    const curDate = dayjs(curDayFmtStr);
     Object.entries(alertMap[curDayFmtStr].user)
-      .filter(([, type]) => type === GanttAlertType.Available)
+      .filter(([, type]) => type === alertType)
       .forEach(([user]) => {
-        userDateMap[user].push(dayjs(curDayFmtStr));
+        userDateMap[user].push(curDate);
       });
-    diff--;
+    diff -= 1;
     curDayFmtStr = date.add(diff, 'day').format('YYYY-MM-DD');
   }
   return Object.entries(userDateMap)
-    .filter(([, value]) => !!value.length)
+    .filter(
+      ([, value]) =>
+        !!value.length &&
+        value.some((date) => date.format('YYYY-MM-DD') === todayFmtStr)
+    )
     .map(([key, value]) => ({
       handler: key,
-      date: mergeDate(value),
+      roles: userRoleGroup[key]
+        ?.flat()
+        .map(({ role }) => role)
+        .join(';'),
+      date: mergeDate(value, date, start, end).join(';'),
     }));
 };

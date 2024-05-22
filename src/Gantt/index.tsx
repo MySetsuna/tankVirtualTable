@@ -25,6 +25,7 @@ export interface GanttBarData<T = any> {
   emptyRange: boolean;
   startAt?: Dayjs;
   endAt?: Dayjs;
+  creating?: boolean;
 }
 
 export interface GroupGanttBarData<T, D> extends GanttBarData<T> {
@@ -54,7 +55,7 @@ export type GanttBarProps<T> = NodeProps<GanttBarData<T>> & {
 export type GroupGanttBarProps<T, D> = NodeProps<GroupGanttBarData<T, D>> & {
   setNodes: React.Dispatch<React.SetStateAction<GanttNode<T, D>[]>>;
   onNodesChange: (changes: any) => void;
-  onBarChange?: (startAt: any, endAt: any, node: any) => void;
+  onBarChange?: (startAt: any, endAt: any, node: GanttNode<T>) => void;
   originStart?: Dayjs;
   // setExpandKeys: React.Dispatch<React.SetStateAction<readonly React.Key[]>>;
   // expandKeys: readonly React.Key[];

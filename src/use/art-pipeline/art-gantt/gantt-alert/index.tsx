@@ -1,36 +1,71 @@
-import { Modal, Tooltip } from 'antd';
+import { Table, Tooltip } from 'antd';
 import React, { useEffect, useState } from 'react';
-import { IApiArtTask } from '../../../art-task';
 import {
   AlertMap,
   GanttAlertType,
+  UserRole,
   buildNearAvailableAlertData,
 } from '../lib/common';
-import { GanttAlertPropps } from '../../../../Gantt/components/VirtualGantt';
 import { ColumnType } from 'antd/lib/table';
+import { GanttAlertProps } from '@/components/Gantt/components/VirtualGantt';
+import { ModalWrap } from '@/components/modal-wrap';
+import { createPortal } from 'react-dom';
+import { IApiArtTask } from '@/model/pmstation/api-modules/art-task';
 
-export const GanttAlert = (props: GanttAlertPropps<IApiArtTask, AlertMap>) => {
-  const { alertMap, params, date, type } = props;
+export const GanttAlert = (
+  props: GanttAlertProps<
+    IApiArtTask,
+    AlertMap,
+    { userRoles: UserRole[]; users: string[] }
+  >
+) => {
+  const {
+    alertMap,
+    params: { userRoles, users },
+    date,
+    type,
+    start,
+    end,
+  } = props;
   const [open, setOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const columns: ColumnType<any>[] = [
-    { title: '人员', dataIndex: 'handler' },
-    { title: 'role', dataIndex: 'role' },
-    { title: 'date', dataIndex: 'date' },
+    {
+      title: '人员ID',
+      dataIndex: 'handler',
+      width: 100,
+    },
+    { title: '用户组', dataIndex: 'roles', width: 100 },
+    { title: '时间段', dataIndex: 'date' },
   ];
+
   const [data, setData] = useState<any[]>([]);
-  const {
-    conflictIds,
-    type: alertType,
-    user,
-  } = alertMap[date.format('YYYY-MM-DD')] ?? {};
+
+  const todayFmtStr = date.format('YYYY-MM-DD');
+
+  // const { conflictIds } = alertMap[todayFmtStr] ?? {};
+
+  const alertCount = data.length;
 
   useEffect(() => {
-    if (GanttAlertType.Available === type && open) {
-      const data = buildNearAvailableAlertData(date, alertMap, params);
+    if (
+      (open || isHovered) &&
+      Object.values(GanttAlertType).includes(type as GanttAlertType)
+    ) {
+      const data = buildNearAvailableAlertData(
+        date,
+        alertMap,
+        users,
+        userRoles,
+        type as GanttAlertType,
+        start,
+        end
+      );
       setData(data);
     }
-  }, [type, alertMap, params, date, open]);
+  }, [type, alertMap, users, date, isHovered, start, end]);
+
   if (GanttAlertType.Normal === type) {
     return null;
   }
@@ -40,23 +75,41 @@ export const GanttAlert = (props: GanttAlertPropps<IApiArtTask, AlertMap>) => {
       <Tooltip
         title={
           GanttAlertType.UnAvailable === type
-            ? conflictIds.length
-            : Object.keys(user).length
+            ? `冲突${alertCount}`
+            : `空闲${alertCount}`
         }
       >
         <div
+          onMouseOver={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           style={{ width: '100%', height: '100%' }}
-          onClick={() => {
-            alertMap[date.format('YYYY-MM-DD')];
-            setOpen(true);
-          }}
+          onClick={
+            GanttAlertType.UnAvailable === type
+              ? () => {
+                  // todo 处理筛选
+                }
+              : () => {
+                  setOpen(true);
+                }
+          }
         ></div>
       </Tooltip>
-      {GanttAlertType.Available === type && (
-        <Modal open={open} onCancel={() => setOpen(false)}>
-          {JSON.stringify(data)}
-        </Modal>
-      )}
+      {GanttAlertType.Available === type &&
+        open &&
+        createPortal(
+          <ModalWrap
+            zIndex={9999}
+            title={`${todayFmtStr}空闲人员（${alertCount}）`}
+            onOk={() => Promise.resolve(true)}
+            onClose={() => {
+              setOpen((pre) => !pre);
+            }}
+            maskClosable
+          >
+            <Table columns={columns} dataSource={data} pagination={false} />
+          </ModalWrap>,
+          document.body
+        )}
     </>
   );
 };

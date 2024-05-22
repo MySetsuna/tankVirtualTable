@@ -9,7 +9,11 @@ import {
   getGroupedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { VirtualItem, useVirtualizer } from '@tanstack/react-virtual';
+import {
+  VirtualItem,
+  Virtualizer,
+  useVirtualizer,
+} from '@tanstack/react-virtual';
 import React, {
   CSSProperties,
   HTMLAttributes,
@@ -45,14 +49,13 @@ import { GanttBarProps, GanttNode, GroupOption } from '../..';
 import {
   Connection,
   NodeTypes,
-  OnNodesChange,
   useEdgesState,
   useNodesState,
   useReactFlow,
 } from 'reactflow';
 import { GanttBarBox } from '../GanttBarBox';
 import GanttFlow from '../GanttFlow';
-import { isEmpty, isEqual, throttle } from 'lodash';
+import { isEmpty, isEqual } from 'lodash';
 import ScrollMirror from 'scrollmirror';
 
 dayjs.extend(advancedFormat);
@@ -124,6 +127,19 @@ export interface GanttAlertOptions<T = any, AM = any, TY = any, P = any> {
   };
 }
 
+export type GanttOnDayCell<T = any> = (
+  date: Dayjs,
+  rows: Row<T>[],
+  rowVirtualizer: Virtualizer<HTMLDivElement, Element>,
+  resizeLeafNode: (
+    rowId: string,
+    width: number,
+    date: Dayjs,
+    virtualRow: VirtualItem
+  ) => void,
+  getNode: (id: string) => GanttNode<T> | undefined
+) => Omit<HTMLAttributes<HTMLDivElement>, 'style'>;
+
 export type VirtualGanttProps<T extends object = any> = {
   data: T[];
   style?: CSSProperties;
@@ -141,22 +157,6 @@ export type VirtualGanttProps<T extends object = any> = {
   getFromLinkIds: (row: T) => Key[];
   getRowId: (row: Row<T>) => string;
   getLeafRowOriginalId: (row: Row<T>) => string;
-  onCellClick?: (row: Row<T>, date: Dayjs) => void;
-  DateCellRender?: (props: {
-    row: Row<T>;
-    virtualRow: VirtualItem;
-    date: Dayjs;
-    originStart?: Dayjs;
-    onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
-    resizeLeafNode: (
-      rowId: string,
-      width: number,
-      date: Dayjs,
-      virtualRow: VirtualItem
-    ) => void;
-    style?: CSSProperties;
-    onClick?: () => void;
-  }) => ReactNode;
   minBarRange?: number;
   // barStyle?: CSSProperties | ((row: T, index: number) => CSSProperties);
   // barClassName?: string | ((row: T, index: number) => string);
@@ -172,7 +172,7 @@ export type VirtualGanttProps<T extends object = any> = {
   scrollSyncElement?: Element[] | NodeListOf<Element>;
   scrollSyncElementQuery?: string;
   scrollSyncClassName: string;
-  onBarChange?: (startAt: Dayjs, endAt: Dayjs, original: T) => void;
+  onBarChange?: (startAt: Dayjs, endAt: Dayjs, node: GanttNode<T>) => void;
   onDisConnect?: (from: string, to: string) => void;
   onConnect?: (connection: Connection) => boolean | Promise<boolean>;
   renderEdgeDeleteTitle?: (props: {
@@ -180,10 +180,10 @@ export type VirtualGanttProps<T extends object = any> = {
     to: GanttNode<any>;
   }) => ReactNode;
   getCustomModeLastDay?: (date: Dayjs, isWeekStartMonday?: boolean) => boolean;
-
   defaultAlertStyle?: CSSProperties;
   defaultAlertClassName?: string;
   hasLastGroupGap?: boolean;
+  onDayCell?: GanttOnDayCell<T>;
 } & (
   | {
       startAt: Dayjs;
@@ -258,8 +258,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     onDisConnect,
     onConnect,
     getLeafRowOriginalId,
-    onCellClick,
-    DateCellRender,
     ganttExpanded,
     renderEdgeDeleteTitle,
     getCustomModeLastDay,
@@ -267,6 +265,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     alertOptions,
     defaultAlertStyle,
     defaultAlertClassName,
+    onDayCell,
   } = props;
   type TData = (typeof data)[0];
 
@@ -279,7 +278,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(
     [] as GanttNode<TData>[]
   );
-
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const [startDate, setStartDate] = useState<Dayjs | undefined>(
@@ -298,6 +296,42 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
   // const [viewportX, setViewportX] = useState<number>(0);
 
   const parentRef = React.useRef<HTMLDivElement>(null);
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: {
+      expanded: ganttExpanded,
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    // debugTable: true,
+  });
+
+  const { rows, rowsById } = table.getRowModel();
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => {
+      const row = rows[index];
+      return row.groupingColumnId ? rowHeight + groupGap : rowHeight;
+    },
+    overscan,
+  });
+
+  const alertMap = useMemo(() => {
+    if (startDate && endDate && showAlert) {
+      return alertOptions.getAlertMap(
+        startDate,
+        endDate,
+        rows,
+        alertOptions.params
+      );
+    }
+    return {};
+  }, [startDate, endDate, alertOptions, rows, showAlert]);
 
   const viewportX = useMemo(() => {
     return (originStart?.diff(startDate, 'day') ?? 0) * cellWidth;
@@ -356,6 +390,75 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     getBarEnd,
   ]);
 
+  const resizeLeafNode = useCallback(
+    (rowId: string, width: number, date: Dayjs, virtualRow: VirtualItem) => {
+      const height = virtualRow.size;
+      const y = virtualRow.start;
+      const diff = getDayDiff(date, originStart, 0);
+      const row = rowsById[rowId];
+
+      if (!row) {
+        throw new Error(`can't find row by id:${rowId}`);
+      }
+      const id = `${getLeafRowOriginalId(row)}`;
+      let startAt: Dayjs | undefined;
+      let endAt: Dayjs | undefined;
+      if (originStart) {
+        const offsetLeft = diff * cellWidth;
+        const offsetRight = offsetLeft + (width ? width - cellWidth : 0);
+        startAt = getDateFormX(offsetLeft, cellWidth, originStart);
+        endAt = getDateFormX(offsetRight, cellWidth, originStart);
+      }
+
+      const newNode: GanttNode<TData> = {
+        hidden: false,
+        id,
+        // height,
+        // width,
+        data: {
+          row,
+          fixedY: y,
+          height,
+          width,
+          minWidth: minBarRange * cellWidth,
+          index: virtualRow.index,
+          cellWidth,
+          hidden: false,
+          emptyRange: false,
+          startAt,
+          endAt: endAt?.isBefore(startAt, 'date') ? startAt : endAt,
+          creating: true,
+        },
+        position: {
+          x: diff * cellWidth,
+          y,
+        },
+        width,
+        height,
+        style: {
+          height,
+          width,
+          cursor: 'grab',
+          visibility: 'visible',
+        },
+        type: 'gantbar',
+      };
+      setNodes((nds) =>
+        nds.filter((node) => node.id !== newNode.id).concat([newNode])
+      );
+    },
+    [
+      originStart,
+      getBarStart,
+      getBarEnd,
+      cellWidth,
+      minBarRange,
+      getRowId,
+      getLeafRowOriginalId,
+      rows,
+    ]
+  );
+
   useEffect(() => {
     if (startAt && endAt) {
       setStartDate(startAt);
@@ -393,7 +496,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     setCurrentDate(currentAt?.isValid() ? currentAt : dayjs());
   }, [currentAt]);
 
-  const { setViewport } = useReactFlow();
+  const { setViewport, getNode } = useReactFlow();
 
   useEffect(() => {
     setViewport({
@@ -436,18 +539,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     }
   }, [currentDate, bufferMonths, cellWidth]);
 
-  const table = useReactTable({
-    data,
-    columns,
-    state: {
-      expanded: ganttExpanded,
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getGroupedRowModel: getGroupedRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
-    // debugTable: true,
-  });
-
   useEffect(() => {
     if (isGroupView) {
       table.setGrouping(
@@ -459,98 +550,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
       table.setGrouping([]);
     }
   }, [table, isGroupView, grouping]);
-
-  const { rows, rowsById } = table.getRowModel();
-
-  const resizeLeafNode = useCallback(
-    (rowId: string, width: number, date: Dayjs, virtualRow: VirtualItem) => {
-      const height = virtualRow.size;
-      const y = virtualRow.start;
-      const diff = getDayDiff(date, originStart, 0);
-      const row = rowsById[rowId];
-
-      if (!row) {
-        throw new Error(`can't find row by id:${rowId}`);
-      }
-      const id = `${getLeafRowOriginalId(row)}`;
-      let startAt: Dayjs | undefined;
-      let endAt: Dayjs | undefined;
-      if (originStart) {
-        const offsetLeft = diff * cellWidth;
-        const offsetRight = offsetLeft + (width ? width - cellWidth : 0);
-        startAt = getDateFormX(offsetLeft, cellWidth, originStart);
-        endAt = getDateFormX(offsetRight, cellWidth, originStart);
-      }
-
-      const newNode: GanttNode<TData> = {
-        hidden: false,
-        id,
-        // height,
-        // width,
-        data: {
-          row,
-          fixedY: y,
-          height,
-          width,
-          minWidth: minBarRange * cellWidth,
-          index: virtualRow.index,
-          cellWidth,
-          hidden: false,
-          emptyRange: false,
-          startAt,
-          endAt: endAt?.isBefore(startAt, 'date') ? startAt : endAt,
-        },
-        position: {
-          x: diff * cellWidth,
-          y,
-        },
-        width,
-        height,
-        style: {
-          height,
-          width,
-          cursor: 'grab',
-          visibility: 'visible',
-        },
-        type: 'gantbar',
-      };
-      setNodes((nds) =>
-        nds.filter((node) => node.id !== newNode.id).concat([newNode])
-      );
-    },
-    [
-      originStart,
-      getBarStart,
-      getBarEnd,
-      cellWidth,
-      minBarRange,
-      getRowId,
-      getLeafRowOriginalId,
-      rows,
-    ]
-  );
-
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const row = rows[index];
-      return row.groupingColumnId ? rowHeight + groupGap : rowHeight;
-    },
-    overscan,
-  });
-
-  const alertMap = useMemo(() => {
-    if (startDate && endDate && showAlert) {
-      return alertOptions.getAlertMap(
-        startDate,
-        endDate,
-        rows,
-        alertOptions.params
-      );
-    }
-    return {};
-  }, [startDate, endDate, alertOptions, rows, showAlert]);
 
   useEffect(() => {
     const edges = getEdges(
@@ -585,7 +584,22 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
         !!isGroupView,
         groupOptions
       );
-      setNodes(nodes);
+      setNodes((oldNodes) => {
+        const changes = isEmpty(oldNodes)
+          ? nodes
+          : nodes.map((newNode) => {
+              const oldNode = oldNodes.find(({ id }) => newNode.id === id);
+
+              if (isEqual(oldNode, newNode)) {
+                return oldNode as GanttNode<TData>;
+              }
+              if (oldNode) {
+                return Object.assign(oldNode, newNode);
+              }
+              return newNode as GanttNode<TData>;
+            });
+        return changes;
+      });
     }
   }, [
     originStart,
@@ -992,7 +1006,9 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                     const date = dayjs(header.id);
                     const dayNumber = date.get('day');
                     const isWeekend = dayNumber === 0 || dayNumber === 6;
-                    const isRest = isHoliday ? isHoliday?.(date) : isWeekend;
+                    const isRest = isHoliday
+                      ? isHoliday?.(date) || isWeekend
+                      : isWeekend;
                     const dayLineHeight = Math.max(
                       ganttBodyHeight,
                       bodyVisibleHeight
@@ -1013,11 +1029,18 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                           // backgroundColor: 'red',
                           borderRight: '1px solid #CDD6E4',
                           // pointerEvents: 'none',
-                          backgroundColor: isRest ? '#F0F3F9;' : 'white',
+                          backgroundColor: isRest ? '#CDD6E460' : 'white',
                           // zIndex: isCurrentDate ?  : -1,
                           zIndex: arr.length - index,
                           position: 'relative',
                         }}
+                        {...onDayCell?.(
+                          date,
+                          rows,
+                          rowVirtualizer,
+                          resizeLeafNode,
+                          getNode
+                        )}
                       >
                         {isCurrentDate && (
                           <>
@@ -1058,39 +1081,48 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                             ></div>
                           </>
                         )}
-                        <div
+                        {/* <div
                           className="cell-handler"
                           style={{ height: '100%', width: '100%', zIndex: 0 }}
                         >
                           {rowVirtualizer.getVirtualItems().map((item) => {
                             const row = rows[item.index];
+                            if (
+                              row.groupingColumnId ||
+                              !nodes.find(
+                                ({ id }) => id === getLeafRowOriginalId(row)
+                              )?.data.emptyRange
+                            ) {
+                              return (
+                                <React.Fragment key={row.id}></React.Fragment>
+                              );
+                            }
                             return (
-                              <React.Fragment key={row.id}>
+                              <div
+                                key={row.id}
+                                style={{
+                                  height: item.size,
+                                  cursor: 'pointer',
+                                  width: '100%',
+                                  position: 'absolute',
+                                  transform: `translateY(${item.start}px)`,
+                                }}
+                                onClick={() => onCellClick?.(row, date)}
+                              >
                                 {DateCellRender && (
                                   <DateCellRender
                                     row={row}
                                     virtualRow={item}
                                     date={date}
                                     onBarChange={onBarChange}
-                                    resizeLeafNode={resizeLeafNode}
-                                    originStart={originStart}
-                                    style={{
-                                      height: item.size,
-                                      cursor: 'pointer',
-                                      width: '100%',
-                                      position: 'absolute',
-                                      transform: `translateY(${item.start}px)`,
-                                      background: row.groupingColumnId
-                                        ? 'white'
-                                        : 'pink',
-                                    }}
-                                    onClick={() => onCellClick?.(row, date)}
+                                    buildLeafNode={buildLeafNode}
+                                    setNodes={setNodes}
                                   />
                                 )}
-                              </React.Fragment>
+                              </div>
                             );
                           })}
-                        </div>
+                        </div> */}
                       </div>
                     );
                   })}

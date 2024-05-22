@@ -2,67 +2,95 @@ import React, {
   Key,
   ReactNode,
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
+import { Dayjs } from 'dayjs';
+import { useSelector } from 'react-redux';
+import { IRootState } from '@/store/reducers';
+import {
+  getDateWorkType,
+  getFormatWorkCalendarSetInfo,
+} from '../../work-calendar/lib';
+import { WorkCalendarStatus } from '@/model/pmstation/work-calendar';
+
+export type MouseCreatorInstance = {
+  moveFn?: (evt: MouseEvent) => void;
+  endFn?: (evt: MouseEvent) => void;
+  rowId?: Key;
+  resizing?: boolean;
+  isQuackCreating?: boolean;
+};
 
 const Context = createContext<
-  | [
-      React.Key[],
-      React.Dispatch<React.SetStateAction<React.Key[]>>,
-      number[],
-      React.Dispatch<React.SetStateAction<number[]>>,
-      {
+  | {
+      expandKeys: string[];
+      setExpandKeys: React.Dispatch<React.SetStateAction<string[]>>;
+      expandCallback: {
         keys?: (idx: Key[]) => void;
-        modules?: (idx: number[]) => void;
-      },
-
-      React.Dispatch<
+        modules?: (idx: Key[]) => void;
+      };
+      setExpandCallback: React.Dispatch<
         React.SetStateAction<{
           keys?: ((idx: Key[]) => void) | undefined;
-          modules?: ((idx: number[]) => void) | undefined;
+          modules?: ((idx: Key[]) => void) | undefined;
         }>
-      >,
-      mouseDownDataRef: React.MutableRefObject<any>,
-      mouseUpDataRef: React.MutableRefObject<any>
-    ]
+      >;
+      mouseCreatorRef: React.MutableRefObject<MouseCreatorInstance>;
+      isHoliday: (date: Dayjs) => boolean;
+    }
   | undefined
 >(undefined);
 type IProps = {
   children: ReactNode;
 };
 
-export const GanttExpandProvider = (props: IProps) => {
-  const [expandKeys, setExpandKeys] = useState<Key[]>([]);
-  const [callback, setCallback] = useState<{
+export const GanttUpdaterProvider = (props: IProps) => {
+  const [expandKeys, setExpandKeys] = useState<string[]>([]);
+  const [expandCallback, setExpandCallback] = useState<{
     keys?: (idx: Key[]) => void;
-    modules?: (idx: number[]) => void;
+    modules?: (idx: Key[]) => void;
   }>({});
-  const [expandModuleIdx, setExpandModuleIdx] = useState<number[]>([]);
-  const mouseDownDataRef = useRef<any>(null);
-  const mouseUpDataRef = useRef<any>(null);
+
+  const mouseCreatorRef = useRef<MouseCreatorInstance>({});
+  const workCalendarDetail = useSelector(
+    (state: IRootState) => state.pm.workCalendar.workCalendarDetail
+  );
+
+  const workCalendarSetInfo = useMemo(
+    () => getFormatWorkCalendarSetInfo(workCalendarDetail),
+    [workCalendarDetail]
+  );
+
+  const isHoliday = useCallback(
+    (date: Dayjs) =>
+      getDateWorkType(date.format('YYYY-MM-DD'), workCalendarSetInfo) ===
+      WorkCalendarStatus.Holiday,
+    [workCalendarSetInfo]
+  );
 
   useEffect(() => {
     return () => {
-      if (mouseDownDataRef.current)
-        document.addEventListener('mouseup', mouseDownDataRef.current.changeFn);
+      if (mouseCreatorRef.current.endFn)
+        document.addEventListener('mouseup', mouseCreatorRef.current.endFn);
     };
   }, []);
+
   return (
     <Context.Provider
       value={
-        [
+        {
           expandKeys,
           setExpandKeys,
-          expandModuleIdx,
-          setExpandModuleIdx,
-          callback,
-          setCallback,
-          mouseDownDataRef,
-          mouseUpDataRef,
-        ] as const
+          expandCallback,
+          setExpandCallback,
+          mouseCreatorRef,
+          isHoliday,
+        } as const
       }
     >
       {props.children}
@@ -73,7 +101,7 @@ export const GanttExpandProvider = (props: IProps) => {
 export function useGanttUpdater() {
   const value = useContext(Context);
   if (!value) {
-    throw new Error('请在 GanttExpandProvider 中使用 useGanttExpand');
+    throw new Error('请在 GanttUpdaterProvider 中使用 useGanttUpdater');
   }
   return value;
 }

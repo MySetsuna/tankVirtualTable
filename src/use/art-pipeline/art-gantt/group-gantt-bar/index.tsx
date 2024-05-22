@@ -1,72 +1,126 @@
-import { IApiArtStory, IApiArtTask } from '../../../art-task';
-import { debounce } from 'lodash';
-import { Key, memo, useCallback, useEffect } from 'react';
+import { BaseGroupHeaderData, GroupGanttBarProps } from '@/components/Gantt';
+import { IApiArtTask } from '@/model/pmstation/api-modules/art-task';
+import { debounce, isNumber } from 'lodash';
+import { Key, memo, useCallback, useMemo } from 'react';
 import { useGanttUpdater } from '../../gantt-updater-provider';
-import { ART_STORY_GROUP_ID } from '../lib/common';
-import React from 'react';
-import { BaseGroupHeaderData, GroupGanttBarProps } from '../../../../Gantt';
+import { StoryStatus } from '../lib/common';
 
-type IProps = GroupGanttBarProps<
-  IApiArtTask,
-  BaseGroupHeaderData<IApiArtStory>
->;
+type IProps = GroupGanttBarProps<IApiArtTask, BaseGroupHeaderData>;
 export const GroupGanttBar = memo((props: IProps) => {
   const { data } = props;
   const { row, group } = data;
 
-  const [
+  const { finishedCount, unfinishedCount, count } = useMemo(() => {
+    let finishedCount = 0;
+    let unfinishedCount = 0;
+    row.getLeafRows().forEach(({ original: { status, artTaskId } }) => {
+      if (!isNumber(artTaskId)) return;
+      if (status === StoryStatus.Finish) {
+        finishedCount += 1;
+      } else {
+        unfinishedCount += 1;
+      }
+    });
+    return {
+      unfinishedCount,
+      finishedCount,
+      count: unfinishedCount + finishedCount,
+    };
+  }, [group, row]);
+
+  const {
     expandKeys,
     setExpandKeys,
-    expandedModuleIdx,
-    setExpandedModuleIdx,
-    callback,
-  ] = useGanttUpdater();
+    expandCallback: callback,
+  } = useGanttUpdater();
 
-  const setExpand =
-    row.groupingColumnId === ART_STORY_GROUP_ID
-      ? setExpandedModuleIdx
-      : setExpandKeys;
-  const expands =
-    row.groupingColumnId === ART_STORY_GROUP_ID
-      ? expandedModuleIdx
-      : expandKeys;
+  // const setExpand =
+  //   row.groupingColumnId === ART_STORY_GROUP_ID
+  //     ? setExpandedModuleIdx
+  //     : setExpandKeys;
+  // const expands =
+  //   row.groupingColumnId === ART_STORY_GROUP_ID
+  //     ? expandedModuleIdx
+  //     : expandKeys;
   const handleExpanded = useCallback(
     debounce(() => {
       // row.toggleExpanded();
       let newExpands: Key[] = [];
       if (row.getIsExpanded()) {
-        newExpands = expands.filter((key: any) => key !== group.id);
+        newExpands = expandKeys.filter((key: any) => key !== row.id);
       } else {
-        console.log(group.id, 'group.id');
-
-        newExpands = [...expands, group.id];
+        newExpands = [...expandKeys, row.id];
       }
-      setExpand(newExpands as any);
-      callback?.modules?.(newExpands as number[]);
+      setExpandKeys(newExpands as any);
+      callback?.modules?.(newExpands);
       // console.log(group, 'group');
     }, 100),
-    [expands]
+    [expandKeys]
   );
-
-  // useEffect(() => {
-  //   row.toggleExpanded(expands.includes(group.id));
-  //   if (row.groupingColumnId === ART_STORY_GROUP_ID) {
-  //     //
-  //   }
-  // }, [expands, row, group]);
 
   return (
     <div
       onClick={handleExpanded}
       style={{
-        background: 'lightskyblue',
+        background: '#00000000',
         width: '100%',
         height: '100%',
+        color: 'black',
       }}
     >
-      <span>{row.getIsExpanded() ? '👇' : '👉'}</span>
-      <span>{row.groupingValue as string}</span>=======
-      <span>{group.data.title}</span>
+      <div
+        className="group-info"
+        style={{
+          display: 'flex',
+          backgroundColor: 'white',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <div
+          style={{
+            background: 'white',
+            width: 'max-content',
+            flex: 'auto',
+            display: 'flex',
+            gap: 20,
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#00000020',
+              flex: 1,
+              height: 0,
+              display: 'flex',
+              gap: 20,
+              padding: '0 6px',
+            }}
+          >
+            <span style={{ fontWeight: 'bolder' }}>{group.data.title}</span>
+            <span className="group-status" style={{ display: 'flex', gap: 5 }}>
+              <span>{count}项</span>
+              <span>已完成（{finishedCount}）</span>
+              <span>|</span>
+              <span>未完成（{unfinishedCount}）</span>
+            </span>
+            <span>
+              {group.startAt?.format('YYYY-MM-DD')}~
+              {group.endAt?.format('YYYY-MM-DD')}
+            </span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: '#00000020',
+            width: 'min-content',
+            flexBasis: 0,
+          }}
+        >
+          <div style={{}}></div>
+        </div>
+      </div>
+      <div style={{ height: 6, backgroundColor: 'blue' }}></div>
     </div>
   );
 });
