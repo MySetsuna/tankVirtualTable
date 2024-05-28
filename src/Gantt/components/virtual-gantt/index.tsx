@@ -1,6 +1,8 @@
 import {
   ColumnDef,
   ColumnDefTemplate,
+  ExpandedState,
+  Header,
   HeaderContext,
   Row,
   flexRender,
@@ -18,6 +20,7 @@ import React, {
   CSSProperties,
   HTMLAttributes,
   Key,
+  MemoExoticComponent,
   ReactElement,
   ReactNode,
   memo,
@@ -53,10 +56,12 @@ import {
   useNodesState,
   useReactFlow,
 } from 'reactflow';
-import { GanttBarBox } from '../GanttBarBox';
-import GanttFlow from '../GanttFlow';
-import { isEmpty, isEqual } from 'lodash';
+import { GanttBarBox } from '../gantt-bar-box';
+import { DebouncedFunc, groupBy, isEqual, throttle } from 'lodash';
 import ScrollMirror from 'scrollmirror';
+import { GanttMilestoneType } from '../../types/gantt';
+import { GanttMilestoneLine } from '../gantt-milestone-line';
+import GanttFlow from '../gantt-flow';
 
 dayjs.extend(advancedFormat);
 
@@ -116,10 +121,16 @@ export type GanttAlertProps<T = any, AM = unknown, P = any> = {
 };
 
 export interface GanttAlertOptions<T = any, AM = any, TY = any, P = any> {
-  component?: (props: GanttAlertProps<T, AM>) => ReactNode;
+  component?: (props: GanttAlertProps<T, AM>) => JSX.Element;
   elementProps?: HTMLAttributes<HTMLDivElement>;
   modeLastDayBorder?: CSSProperties['border'];
-  getAlertMap: (start: Dayjs, end: Dayjs, rows: Row<T>[], params: P) => AM;
+  getAlertMap: (
+    start: Dayjs,
+    end: Dayjs,
+    rows: Row<T>[],
+    params: P,
+    showType?: TY
+  ) => AM;
   getAlertType: (date: Dayjs, rows: Row<T>[], data: AM) => TY;
   params?: P;
   typeElemetPropsMap: {
@@ -138,7 +149,27 @@ export type GanttOnDayCell<T = any> = (
     virtualRow: VirtualItem
   ) => void,
   getNode: (id: string) => GanttNode<T> | undefined
-) => Omit<HTMLAttributes<HTMLDivElement>, 'style'>;
+) => Omit<HTMLAttributes<HTMLDivElement>, 'onMouseMove'> & {
+  onMouseMove:
+    | DebouncedFunc<(event: React.MouseEvent<HTMLDivElement>) => void>
+    | HTMLAttributes<HTMLDivElement>['onMouseMove'];
+};
+
+export type GanttOnRow<T = any> = (
+  style: CSSProperties,
+  row: Row<T>,
+  virtualRow: VirtualItem
+) => HTMLAttributes<HTMLDivElement>;
+
+export type GanttOnHeaderCell<T = any> = (
+  header?: Header<T, any>,
+  isLeafHeader?: boolean
+) => HTMLAttributes<HTMLDivElement>;
+
+type TablePining = {
+  left?: string[];
+  right?: string[];
+};
 
 export type VirtualGanttProps<T extends object = any> = {
   data: T[];
@@ -162,7 +193,9 @@ export type VirtualGanttProps<T extends object = any> = {
   // barClassName?: string | ((row: T, index: number) => string);
   isGroupView?: boolean;
   groupOptions?: Array<GroupOption<T>>;
-  GanttBar?: (props: GanttBarProps<T>) => ReactNode;
+  GanttBar?:
+    | ((props: GanttBarProps<T>) => JSX.Element)
+    | MemoExoticComponent<(props: GanttBarProps<T>) => JSX.Element>;
   groupGap?: number;
   ganttExpanded?: { [expandKey: string]: true };
   showYearRow?: boolean;
@@ -176,14 +209,23 @@ export type VirtualGanttProps<T extends object = any> = {
   onDisConnect?: (from: string, to: string) => void;
   onConnect?: (connection: Connection) => boolean | Promise<boolean>;
   renderEdgeDeleteTitle?: (props: {
-    form: GanttNode<any>;
+    from: GanttNode<any>;
     to: GanttNode<any>;
   }) => ReactNode;
   getCustomModeLastDay?: (date: Dayjs, isWeekStartMonday?: boolean) => boolean;
   defaultAlertStyle?: CSSProperties;
   defaultAlertClassName?: string;
   hasLastGroupGap?: boolean;
+  lastGroupGap?: number;
   onDayCell?: GanttOnDayCell<T>;
+  alertType?: string;
+  milestones?: GanttMilestoneType[];
+  defaultMilestonesColor?: string;
+  onGroupGap?: GanttOnRow<T>;
+  onGroupHeader?: GanttOnRow<T>;
+  onRowFloat?: GanttOnRow<T>;
+  onHeaderCell?: GanttOnHeaderCell<T>;
+  isGroup?: (row: Row<T>) => boolean;
 } & (
   | {
       startAt: Dayjs;
@@ -224,17 +266,20 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     overscan = 10,
     bufferDay = 10,
     groupGap = 10,
+    lastGroupGap = 0,
     hasLastGroupGap = false,
     rowHeight = 34,
     cellWidth = 50,
     minBarRange = 1,
     alertHeight = 16,
+    milestones = [],
+    defaultMilestonesColor = 'blue',
     data,
     currentAt,
     startAt,
     endAt,
     headRender,
-    headerHeight: headerHeightOp,
+    headerHeight: headerHeightOps,
     showYearRow,
     style,
     isHoliday,
@@ -263,17 +308,18 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     getCustomModeLastDay,
     showAlert,
     alertOptions,
+    alertType,
     defaultAlertStyle,
     defaultAlertClassName,
     onDayCell,
+    onGroupGap,
+    onGroupHeader,
+    onHeaderCell,
+    isGroup,
   } = props;
   type TData = (typeof data)[0];
 
   const [columns, setColumns] = useState<ColumnDef<any>[]>([]);
-
-  const [headerHeightOps, setheaderHeightOps] = useState<
-    HeaderHeightOps | undefined
-  >(headerHeightOp);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(
     [] as GanttNode<TData>[]
@@ -289,6 +335,11 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
   const [bufferMonths, setBufferMonths] = useState<BufferMonths>(
     bufferM ?? [3, 2]
   );
+
+  const [columnPinning, setColumnPinning] = useState<TablePining>({});
+
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+
   const [endDate, setEndDate] = useState<Dayjs | undefined>(endAt?.clone());
   const [currentDate, setCurrentDate] = useState<Dayjs | undefined>(currentAt);
   const scrollToTimer = useRef<NodeJS.Timeout | null>(null);
@@ -297,14 +348,36 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
 
   const parentRef = React.useRef<HTMLDivElement>(null);
 
+  const scrollMirrorRef = useRef<ScrollMirror | null>(null);
+
+  const scrollTimerRef = useRef<number | null>(null);
+
+  const {
+    groupColumns,
+    grouping,
+  }: { groupColumns: ColumnDef<any>[]; grouping: string[] } = useMemo(() => {
+    return {
+      groupColumns: (groupOptions?.map(({ groupId, groupKey }) => {
+        return {
+          id: groupId,
+          accessorFn: groupKey,
+          size: 0,
+        };
+      }) ?? []) as ColumnDef<any>[],
+      grouping: groupOptions?.map(({ groupId }) => groupId) ?? [],
+    };
+  }, [groupOptions]);
+
   const table = useReactTable({
     data,
     columns,
     state: {
-      expanded: ganttExpanded,
+      expanded,
+      columnPinning,
     },
     getCoreRowModel: getCoreRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
+    onColumnPinningChange: setColumnPinning,
     getExpandedRowModel: getExpandedRowModel(),
     // debugTable: true,
   });
@@ -316,6 +389,9 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     getScrollElement: () => parentRef.current,
     estimateSize: (index) => {
       const row = rows[index];
+      if (isGroup) {
+        return isGroup(row) ? rowHeight + groupGap : rowHeight;
+      }
       return row.groupingColumnId ? rowHeight + groupGap : rowHeight;
     },
     overscan,
@@ -327,25 +403,27 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
         startDate,
         endDate,
         rows,
-        alertOptions.params
+        alertOptions.params,
+        alertType
       );
     }
     return {};
-  }, [startDate, endDate, alertOptions, rows, showAlert]);
+  }, [startDate, endDate, alertOptions, rows, showAlert, alertType]);
+
+  const { groupVirtualRows = [] } = useMemo(() => {
+    return groupBy(rowVirtualizer.getVirtualItems(), (virtualItem) => {
+      const row = rows[virtualItem.index];
+      return row.getIsGrouped() ? 'groupVirtualRows' : 'leafVirtualRows';
+    });
+    // return rowVirtualizer.getVirtualItems().filter((virtualItem) => {
+    //   const row = rows[virtualItem.index];
+    //   return row.getIsGrouped();
+    // });
+  }, [rows, rowVirtualizer.getVirtualItems()]);
 
   const viewportX = useMemo(() => {
     return (originStart?.diff(startDate, 'day') ?? 0) * cellWidth;
   }, [originStart, startDate, cellWidth]);
-
-  const { groupColumns, grouping } = useMemo(() => {
-    return {
-      groupColumns:
-        groupOptions?.map(({ groupId, groupKey }) => {
-          return { id: groupId, accessorFn: groupKey, size: 0 };
-        }) ?? [],
-      grouping: groupOptions?.map(({ groupId }) => groupId) ?? [],
-    };
-  }, [groupOptions]);
 
   const nodeTypes = useMemo(() => {
     return (groupOptions ?? []).reduce<NodeTypes>(
@@ -359,6 +437,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               onNodesChange={onNodesChange}
               onBarChange={onBarChange}
               originStart={originStart}
+              rowsById={rowsById}
             />
           ),
         };
@@ -374,6 +453,8 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
             getBarStart={getBarStart}
             getBarEnd={getBarEnd}
             rows={rows}
+            groupOptions={groupOptions}
+            rowsById={rowsById}
           >
             {GanttBar}
           </GanttBarBox>
@@ -459,6 +540,77 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     ]
   );
 
+  const throttleSetEdges = useCallback(
+    throttle(
+      (
+        rows: Row<TData>[],
+        virtualItems: VirtualItem[],
+        getFromLinkIds: (row: TData) => Key[],
+        getLeafRowOriginalId: (row: Row<TData>) => string
+      ) => {
+        const edges = getEdges(
+          rows,
+          virtualItems,
+          getFromLinkIds,
+          getLeafRowOriginalId
+        );
+
+        if (edges) {
+          setEdges(edges);
+        }
+      },
+      300
+    ),
+    []
+  );
+
+  const throttleSetNodes = useCallback(
+    throttle(
+      (
+        rows: Row<TData>[],
+        virtualItems: VirtualItem[],
+        getDayDiff: (
+          date?: Dayjs,
+          offsetDate?: Dayjs,
+          defaultDiff?: number
+        ) => number,
+        originStart: Dayjs,
+        getBarStart: (row: TData) => Dayjs | undefined,
+        getBarEnd: (row: TData) => Dayjs | undefined,
+        cellWidth: number,
+        minBarRange: number,
+        getRowId: (row: Row<TData>) => string,
+        getLeafRowOriginalId: (row: Row<TData>) => string,
+        groupGap: number,
+        isGroupView: boolean,
+        groupOptions?: GroupOption<TData>[],
+        isGroup?: (row: Row<TData>) => boolean
+      ) => {
+        const nodes = getNodes(
+          rows,
+          virtualItems,
+          getDayDiff,
+          originStart,
+          getBarStart,
+          getBarEnd,
+          cellWidth,
+          minBarRange,
+          getRowId,
+          getLeafRowOriginalId,
+          groupGap,
+          !!isGroupView,
+          groupOptions,
+          isGroup
+        );
+        if (nodes) {
+          setNodes(nodes);
+        }
+      },
+      300
+    ),
+    []
+  );
+
   useEffect(() => {
     if (startAt && endAt) {
       setStartDate(startAt);
@@ -474,22 +626,19 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
   }, [bufferM, bufferMonths]);
 
   useEffect(() => {
-    if (headerHeightOp && !isEqual(headerHeightOps, headerHeightOp)) {
-      setheaderHeightOps(headerHeightOp);
-    }
-  }, [headerHeightOps, headerHeightOp]);
-
-  React.useEffect(() => {
-    new ScrollMirror(
-      scrollSyncElement ??
+    if (!scrollMirrorRef.current) {
+      const mirrorElements =
+        scrollSyncElement ??
         document.querySelectorAll(
           scrollSyncElementQuery ?? `.${scrollSyncClassName}`
-        ),
-      {
-        horizontal: false,
-        proportional: true,
+        );
+      if (mirrorElements.length >= 2) {
+        scrollMirrorRef.current = new ScrollMirror(mirrorElements, {
+          horizontal: false,
+          proportional: true,
+        });
       }
-    );
+    }
   }, [tableNode]);
 
   useEffect(() => {
@@ -540,26 +689,27 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
   }, [currentDate, bufferMonths, cellWidth]);
 
   useEffect(() => {
-    if (isGroupView) {
-      table.setGrouping(
-        grouping.filter((groupId) => {
-          return !!table.getColumn(groupId);
-        })
-      );
-    } else {
-      table.setGrouping([]);
-    }
-  }, [table, isGroupView, grouping]);
+    setColumnPinning({ right: grouping });
+  }, [grouping]);
 
   useEffect(() => {
-    const edges = getEdges(
-      rows,
-      rowVirtualizer.getVirtualItems(),
-      getFromLinkIds,
-      getLeafRowOriginalId
-    );
+    if (ganttExpanded) {
+      setExpanded(ganttExpanded);
+    }
+  }, [ganttExpanded]);
 
-    setEdges(edges);
+  useEffect(() => {
+    requestIdleCallback(
+      () => {
+        throttleSetEdges(
+          rows,
+          rowVirtualizer.getVirtualItems(),
+          getFromLinkIds,
+          getLeafRowOriginalId
+        );
+      },
+      { timeout: 100 }
+    );
   }, [
     rows,
     rowVirtualizer.getVirtualItems(),
@@ -569,37 +719,27 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
 
   useEffect(() => {
     if (originStart) {
-      const nodes = getNodes(
-        rows,
-        rowVirtualizer.getVirtualItems(),
-        getDayDiff,
-        originStart,
-        getBarStart,
-        getBarEnd,
-        cellWidth,
-        minBarRange,
-        getRowId,
-        getLeafRowOriginalId,
-        groupGap,
-        !!isGroupView,
-        groupOptions
+      requestIdleCallback(
+        () => {
+          throttleSetNodes(
+            rows,
+            rowVirtualizer.getVirtualItems(),
+            getDayDiff,
+            originStart,
+            getBarStart,
+            getBarEnd,
+            cellWidth,
+            minBarRange,
+            getRowId,
+            getLeafRowOriginalId,
+            groupGap,
+            !!isGroupView,
+            groupOptions,
+            isGroup
+          );
+        },
+        { timeout: 100 }
       );
-      setNodes((oldNodes) => {
-        const changes = isEmpty(oldNodes)
-          ? nodes
-          : nodes.map((newNode) => {
-              const oldNode = oldNodes.find(({ id }) => newNode.id === id);
-
-              if (isEqual(oldNode, newNode)) {
-                return oldNode as GanttNode<TData>;
-              }
-              if (oldNode) {
-                return Object.assign(oldNode, newNode);
-              }
-              return newNode as GanttNode<TData>;
-            });
-        return changes;
-      });
     }
   }, [
     originStart,
@@ -613,6 +753,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     groupOptions,
     getLeafRowOriginalId,
     getRowId,
+    isGroup,
   ]);
 
   useLayoutEffect(() => {
@@ -639,6 +780,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
       }
       setColumns([...columns, ...groupColumns]);
       scrollCallback.current?.();
+      table.setGrouping(grouping);
     }
   }, [
     startDate,
@@ -649,9 +791,21 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
     mode,
     groupColumns,
     bufferDay,
+    grouping,
   ]);
 
   const handleScroll = useCallback(() => {
+    document.body.style.pointerEvents = 'none';
+    if (scrollTimerRef.current) {
+      cancelIdleCallback(scrollTimerRef.current);
+      scrollTimerRef.current = null;
+    }
+    scrollTimerRef.current = requestIdleCallback(
+      () => {
+        document.body.style.pointerEvents = 'auto';
+      },
+      { timeout: 50 }
+    );
     if (!scrollCallback.current && isInfiniteX && parentRef.current) {
       const toLeft = parentRef.current?.scrollLeft === 0;
       const toRight =
@@ -677,62 +831,68 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
           });
           scrollCallback.current = null;
         };
-        setStartDate((date) => date?.add(bufferDay, 'day'));
+        setStartDate((date) => {
+          return date?.add(bufferDay, 'day');
+        });
         setEndDate((date) => date?.add(bufferDay, 'day'));
         return;
       }
     }
   }, [cellWidth, bufferDay]);
 
-  const visibleHeaderGroups = table
-    .getHeaderGroups()
-    .slice(showYearRow ? 0 : 1);
+  const visibleHeaderGroups = useMemo(
+    () => table.getCenterHeaderGroups().slice(showYearRow ? 0 : 1),
+    [showYearRow, table, table.getCenterHeaderGroups()]
+  );
 
-  const leafHeaderGroup = visibleHeaderGroups[visibleHeaderGroups.length - 1];
+  const leafHeaderGroupHeaders =
+    visibleHeaderGroups[visibleHeaderGroups.length - 1]?.headers;
 
-  const headerHeight =
-    visibleHeaderGroups.reduce((totalHeight, _headerGroup, index) => {
-      const height =
-        headerHeightOps?.[index] || headerHeightOps?.[0] || rowHeight;
-      return totalHeight + height;
-    }, 0) + (showAlert ? alertHeight : 0);
+  const headerHeight = useMemo(
+    () =>
+      visibleHeaderGroups.reduce((totalHeight, _headerGroup, index) => {
+        const height =
+          headerHeightOps?.[index] || headerHeightOps?.[0] || rowHeight;
+        return totalHeight + height;
+      }, 0) + (showAlert ? alertHeight : 0),
+    [headerHeightOps, showAlert, alertHeight, rowHeight, visibleHeaderGroups]
+  );
 
   const bodyVisibleHeight =
     (parentRef.current?.clientHeight ?? 0) - headerHeight;
 
-  const ganttBodyHeight =
-    rowVirtualizer.getTotalSize() + (hasLastGroupGap ? groupGap : 0);
-  const scrollHeight = ganttBodyHeight + headerHeight;
-  const scrollWidth = table
-    .getHeaderGroups()[0]
-    .headers.filter((header) => !grouping.includes(header.column.id))
-    .reduce((total, cur) => total + cur.getSize(), 0);
+  const ganttBodyHeight = rowVirtualizer.getTotalSize();
 
-  // useEffect(() => {
-  //   const colMap = {};
-  //   const idleMap = {};
-  //   if (!!startDate && !!endDate && getAlertType) {
-  //     for (
-  //       let current = startDate;
-  //       current?.diff(endDate, 'day') !== 0;
-  //       current?.add(1, 'day')
-  //     ) {
-  //       const { type, data } =
-  //         getAlertType.fn(current, rows, getAlertType.params) ?? {};
-  //     }
-  //   }
-  // }, [startDate, endDate, getAlertType]);
+  const scrollHeight =
+    ganttBodyHeight +
+    headerHeight +
+    (hasLastGroupGap ? lastGroupGap ?? groupGap : 0);
+
+  const scrollWidth = table.getCenterTotalSize();
+
+  const getDateMilestone = useCallback(
+    (date: Dayjs) => {
+      return milestones.find((ms) => ms.date.isSame(date, 'date'));
+    },
+    [milestones]
+  );
+
+  const isAlertType = useCallback(
+    (type: string) => {
+      return typeof alertType === 'string' && alertType === type;
+    },
+    [alertType]
+  );
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      <div style={{ position: 'fixed', color: 'red', zIndex: 99999 }}>
-        {originStart?.format('YYYY-MM-DD')}::: {startDate?.format('YYYY-MM-DD')}{' '}
-        :::
-        {startDate?.diff(originStart, 'day')}:::
-        {(startDate?.diff(originStart, 'day') ?? 0) * cellWidth}:::
-        {viewportX}
-      </div>
+    <div
+      style={{
+        display: 'flex',
+        height: '100%',
+      }}
+    >
       {tableNode}
+
       <div
         ref={parentRef}
         className={['gantt-container', 'container', scrollSyncClassName].join(
@@ -741,6 +901,48 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
         style={style}
         onScroll={handleScroll}
       >
+        {/* {!!onRowFloat &&
+          leafVirtualRows.map((virtualItem) => {
+            // const row = rows[virtualItem.index];
+            // const node = getNode(getLeafRowOriginalId(row));
+            return (
+              <div
+                key={virtualItem.key}
+                className="group-float-row"
+                style={{
+                  height: rowHeight,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+                {...onRowFloat(
+                  {
+                    height: rowHeight,
+                    width: scrollWidth,
+                    transform: `translateY(${
+                      virtualItem.start + headerHeight
+                    }px) translateX(0)`,
+                    zIndex: 88,
+                    position: 'absolute',
+                    pointerEvents: 'none',
+                  },
+                  rows[virtualItem.index],
+                  virtualItem
+                )}
+              >
+                <div
+                  style={{
+                    position: 'sticky',
+                    left: 0,
+                    height: '100%',
+                    width: 'min-content',
+                    pointerEvents: 'auto',
+                  }}
+                >
+                  777777777
+                </div>
+              </div>
+            );
+          })} */}
         <div
           className="gantt-scroll-container"
           style={{
@@ -754,7 +956,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
               display: 'flex',
               position: 'sticky',
               top: 0,
-              zIndex: 3,
+              zIndex: 4,
               flexDirection: 'column',
               // overflow: 'hidden',
             }}
@@ -773,23 +975,26 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                     .map((header, index) => {
                       const isLeafHeader = header.depth === 3;
 
+                      const onHeader = onHeaderCell?.(header, isLeafHeader);
+
                       return (
                         <div
                           key={header.id}
                           // colSpan={header.colSpan}
                           style={{
-                            background: 'black',
-                            color: 'white',
+                            // background: 'black',
+                            // color: 'white',
                             fontWeight: 'bolder',
                             width: header.getSize(),
                             height,
                             flexShrink: 0,
-                            borderRight: '1px white solid',
-                            borderBottom: !isLeafHeader
-                              ? '1px white solid'
-                              : 'unset',
+                            // borderRight: '1px white solid',
+                            // borderBottom: !isLeafHeader
+                            //   ? '1px white solid'
+                            //   : 'unset',
                             zIndex: index,
                           }}
+                          {...onHeader}
                         >
                           {header.isPlaceholder ? null : (
                             <div
@@ -801,7 +1006,6 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                                       width: 0,
                                       whiteSpace: 'nowrap',
                                       height,
-
                                       overflow: 'visible',
                                     }
                                   : { height }
@@ -833,45 +1037,52 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                 className="gantt-alert"
                 style={{ height: alertHeight, display: 'flex', zIndex: 999 }}
               >
-                {leafHeaderGroup?.headers
-                  .filter((header) => !grouping.includes(header.column.id))
-                  .map((header) => {
-                    const date = dayjs(header.id);
+                {leafHeaderGroupHeaders?.map((header) => {
+                  const date = dayjs(header.id);
 
-                    const isCurrentDate =
-                      currentAt?.format('YYYY-MM-DD') ===
-                      date.format('YYYY-MM-DD');
+                  const isModeLastDay =
+                    mode === GanttCustomMode.CustomMode
+                      ? getCustomModeLastDay?.(date, isWeekStartMonday) ?? false
+                      : getIsModeLastDay(mode, date, isWeekStartMonday);
+                  const dayLineTop =
+                    headerHeightOps?.[headerHeightOps.length - 1] ||
+                    headerHeightOps?.[0] ||
+                    rowHeight;
 
-                    const isModeLastDay =
-                      mode === GanttCustomMode.CustomMode
-                        ? getCustomModeLastDay?.(date, isWeekStartMonday) ??
-                          false
-                        : getIsModeLastDay(mode, date, isWeekStartMonday);
-                    const dayLineTop =
-                      headerHeightOps?.[headerHeightOps.length - 1] ||
-                      headerHeightOps?.[0] ||
-                      rowHeight;
+                  const dayLineHeight = dayLineTop + alertHeight;
 
-                    const dayLineHeight = dayLineTop + alertHeight;
+                  const type = alertOptions?.getAlertType(date, rows, alertMap);
 
-                    const type = alertOptions?.getAlertType(
-                      date,
-                      rows,
-                      alertMap
-                    );
+                  const isShowAlertType = isAlertType(type);
 
-                    const {
-                      modeLastDayBorder,
-                      component: AlertComponent,
-                      elementProps,
-                      typeElemetPropsMap,
-                      params,
-                    } = alertOptions;
-                    const typeElemetProps = typeElemetPropsMap[type];
-                    return (
+                  const {
+                    modeLastDayBorder,
+                    component: AlertComponent,
+                    elementProps,
+                    typeElemetPropsMap,
+                    params,
+                  } = alertOptions;
+                  const typeElemetProps = typeElemetPropsMap[type];
+
+                  const ms = getDateMilestone(date);
+                  return (
+                    <React.Fragment key={header.id}>
+                      {ms && (
+                        <GanttMilestoneLine
+                          width={2}
+                          height={dayLineHeight}
+                          top={-dayLineTop}
+                          hasTopPot
+                          style={{ zIndex: 89 }}
+                          left={header.getStart()}
+                          cellWidth={header.getSize()}
+                          isModeLastDay={isModeLastDay}
+                          color={defaultMilestonesColor}
+                          {...ms}
+                        />
+                      )}
                       <div
                         className={defaultAlertClassName}
-                        key={header.id}
                         {...elementProps}
                         {...typeElemetProps}
                         style={{
@@ -883,7 +1094,7 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                           // pointerEvents: 'none',
                           // backgroundColor: 'red',
                           // zIndex: isCurrentDate ?  : -1,
-                          zIndex: 888,
+                          zIndex: 88,
                           position: 'relative',
                           ...defaultAlertStyle,
 
@@ -891,10 +1102,10 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                             ? modeLastDayBorder ?? '1px solid black'
                             : 'unset',
                           ...elementProps?.style,
-                          ...typeElemetProps?.style,
+                          ...(isShowAlertType ? typeElemetProps?.style : {}),
                         }}
                       >
-                        {AlertComponent && (
+                        {AlertComponent && isShowAlertType && (
                           <AlertComponent
                             type={type}
                             date={date}
@@ -905,56 +1116,10 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                             end={endDate}
                           />
                         )}
-                        {isCurrentDate && (
-                          <>
-                            <div
-                              style={{
-                                height: '100%',
-                                width: 5,
-                                backgroundColor: 'transparent',
-                                position: 'absolute',
-                                top: -dayLineTop,
-                                display: 'flex',
-                                justifyContent: 'start',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  background: '#5764F0',
-                                  borderRadius: '100%',
-                                  width: 6,
-                                  height: 6,
-                                  position: 'relative',
-                                }}
-                              ></div>
-                              <div
-                                style={{
-                                  height: dayLineHeight,
-                                  width: 2,
-                                  backgroundColor: '#5764F0',
-                                  position: 'absolute',
-                                  display: 'flex',
-                                  justifyContent: 'start',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                }}
-                              ></div>
-                            </div>
-                            <div
-                              style={{
-                                color: 'lightblue',
-                                position: 'absolute',
-                                left: '100%',
-                              }}
-                            ></div>
-                          </>
-                        )}
                       </div>
-                    );
-                  })}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -995,35 +1160,109 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                   width: scrollWidth,
                   height: Math.max(ganttBodyHeight, bodyVisibleHeight),
                   // height: 0,
-                  zIndex: 3,
+                  zIndex: 2,
                   backgroundColor: 'white',
                   // pointerEvents: 'none',
                 }}
               >
-                {leafHeaderGroup?.headers
-                  .filter((header) => !grouping.includes(header.column.id))
-                  .map((header, index, arr) => {
-                    const date = dayjs(header.id);
-                    const dayNumber = date.get('day');
-                    const isWeekend = dayNumber === 0 || dayNumber === 6;
-                    const isRest = isHoliday
-                      ? isHoliday?.(date) || isWeekend
-                      : isWeekend;
-                    const dayLineHeight = Math.max(
-                      ganttBodyHeight,
-                      bodyVisibleHeight
-                    );
-
-                    const isCurrentDate =
-                      currentAt?.format('YYYY-MM-DD') ===
-                      date.format('YYYY-MM-DD');
-
+                {(onGroupGap || onGroupHeader) &&
+                  groupVirtualRows.map((virtualItem) => {
+                    const row = rows[virtualItem.index];
+                    const isGrouped = isGroup?.(row);
                     return (
+                      <React.Fragment key={virtualItem.key}>
+                        {isGrouped && onGroupGap && (
+                          <div
+                            className="group-gap"
+                            style={{
+                              height: groupGap,
+                              width: '100%',
+                            }}
+                            {...onGroupGap(
+                              {
+                                height: groupGap,
+                                width: scrollWidth,
+                                position: 'absolute',
+                                zIndex: 88,
+                                transform: `translateY(${virtualItem.start}px)`,
+                              },
+                              rows[virtualItem.index],
+                              virtualItem
+                            )}
+                          ></div>
+                        )}
+                        {onGroupHeader && (
+                          <div
+                            className="group-header"
+                            style={{
+                              height: rowHeight,
+                              width: '100%',
+                              transform: `translateY(${
+                                isGrouped ? groupGap : 0
+                              }px)`,
+                            }}
+                            {...onGroupHeader(
+                              {
+                                height: rowHeight,
+                                width: scrollWidth,
+                                transform: `translateY(${
+                                  virtualItem.start + (isGrouped ? groupGap : 0)
+                                }px)`,
+                                zIndex: 88,
+                                position: 'absolute',
+                              },
+                              rows[virtualItem.index],
+                              virtualItem
+                            )}
+                          ></div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                {leafHeaderGroupHeaders?.map((header) => {
+                  const date = dayjs(header.id);
+                  const dayNumber = date.get('day');
+                  const isWeekend = dayNumber === 0 || dayNumber === 6;
+                  const isRest = isHoliday
+                    ? isHoliday?.(date) || isWeekend
+                    : isWeekend;
+                  const dayLineHeight = Math.max(
+                    ganttBodyHeight,
+                    bodyVisibleHeight
+                  );
+                  const dateCellProps = onDayCell?.(
+                    date,
+                    rows,
+                    rowVirtualizer,
+                    resizeLeafNode,
+                    getNode
+                  );
+
+                  const ms = getDateMilestone(date);
+
+                  return (
+                    <React.Fragment key={header.id}>
+                      {ms && (
+                        <GanttMilestoneLine
+                          width={2}
+                          height={dayLineHeight}
+                          top={0}
+                          isBody
+                          left={header.getStart()}
+                          cellWidth={cellWidth}
+                          style={{
+                            zIndex: 89,
+                          }}
+                          color={defaultMilestonesColor}
+                          {...ms}
+                        />
+                      )}
                       <div
                         key={header.id}
+                        {...dateCellProps}
                         style={{
                           display: 'flex',
-                          justifyContent: 'center',
+                          // justifyContent: 'center',
                           width: header.getSize(),
                           height: '100%',
                           // backgroundColor: 'red',
@@ -1031,101 +1270,15 @@ const VirtualGanttComponent = (props: VirtualGanttProps) => {
                           // pointerEvents: 'none',
                           backgroundColor: isRest ? '#CDD6E460' : 'white',
                           // zIndex: isCurrentDate ?  : -1,
-                          zIndex: arr.length - index,
+                          // zIndex: arr.length - index,
+                          zIndex: -1,
                           position: 'relative',
+                          ...dateCellProps?.style,
                         }}
-                        {...onDayCell?.(
-                          date,
-                          rows,
-                          rowVirtualizer,
-                          resizeLeafNode,
-                          getNode
-                        )}
-                      >
-                        {isCurrentDate && (
-                          <>
-                            <div
-                              style={{
-                                height: dayLineHeight,
-                                width: 5,
-                                backgroundColor: 'transparent',
-                                position: 'absolute',
-                                top: 0,
-                                display: 'flex',
-                                justifyContent: 'start',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                cursor: 'pointer',
-                                zIndex: 1,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  height: '100%',
-                                  width: 2,
-                                  backgroundColor: '#5764F0',
-                                  position: 'absolute',
-                                  display: 'flex',
-                                  justifyContent: 'start',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                }}
-                              ></div>
-                            </div>
-                            <div
-                              style={{
-                                color: 'lightblue',
-                                position: 'absolute',
-                                left: '100%',
-                              }}
-                            ></div>
-                          </>
-                        )}
-                        {/* <div
-                          className="cell-handler"
-                          style={{ height: '100%', width: '100%', zIndex: 0 }}
-                        >
-                          {rowVirtualizer.getVirtualItems().map((item) => {
-                            const row = rows[item.index];
-                            if (
-                              row.groupingColumnId ||
-                              !nodes.find(
-                                ({ id }) => id === getLeafRowOriginalId(row)
-                              )?.data.emptyRange
-                            ) {
-                              return (
-                                <React.Fragment key={row.id}></React.Fragment>
-                              );
-                            }
-                            return (
-                              <div
-                                key={row.id}
-                                style={{
-                                  height: item.size,
-                                  cursor: 'pointer',
-                                  width: '100%',
-                                  position: 'absolute',
-                                  transform: `translateY(${item.start}px)`,
-                                }}
-                                onClick={() => onCellClick?.(row, date)}
-                              >
-                                {DateCellRender && (
-                                  <DateCellRender
-                                    row={row}
-                                    virtualRow={item}
-                                    date={date}
-                                    onBarChange={onBarChange}
-                                    buildLeafNode={buildLeafNode}
-                                    setNodes={setNodes}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div> */}
-                      </div>
-                    );
-                  })}
+                      ></div>
+                    </React.Fragment>
+                  );
+                })}
               </div>
             </GanttFlow>
           </div>
@@ -1171,21 +1324,26 @@ const defaultProps: Partial<VirtualGanttProps> = {
     },
     month: (date) => {
       return () => {
-        return date.format('YYYY年M月');
+        const month = date.get('month');
+        if (!month) {
+          return date.format('YYYY年M月');
+        }
+        return date.format('M月');
       };
     },
-    week: (date, timezone) => {
+    week: (date) => {
       return () => {
-        const end = date.add(6, 'day');
-        const format =
-          end.get('year') !== date.get('year') ? 'YYYY-MM-DD' : 'MM-DD';
+        // const end = date.add(6, 'day');
+        // const format =
+        //   end.get('year') !== date.get('year') ? 'YYYY-MM-DD' : 'MM-DD';
 
-        return (
-          `${date.locale(timezone).weekYear()}年` +
-          ' ' +
-          `${date.locale(timezone).week()}周 ` +
-          `${date.format(format)}~${date.add(6, 'day').format(format)}`
-        );
+        // return (
+        //   `${date.locale(timezone).weekYear()}年` +
+        //   ' ' +
+        //   `${date.locale(timezone).week()}周 ` +
+        //   `${date.format(format)}~${date.add(6, 'day').format(format)}`
+        // );
+        return date.format('M月D日');
       };
     },
   },

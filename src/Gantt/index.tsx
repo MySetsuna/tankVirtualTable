@@ -1,5 +1,5 @@
-import React, { FC, Key, memo } from 'react';
-import { VirtualGantt, VirtualGanttProps } from './components/VirtualGantt';
+import React, { FC, Key, MemoExoticComponent, memo, useMemo } from 'react';
+import { VirtualGantt, VirtualGanttProps } from './components/virtual-gantt';
 import { Dayjs } from 'dayjs';
 import { Row } from '@tanstack/react-table';
 import { Node, NodeProps, ReactFlowProvider } from 'reactflow';
@@ -36,7 +36,11 @@ export type GanttNode<T, D = any> = Node<
   GanttBarData<T> | GroupGanttBarData<T, D>
 >;
 
-export type CmpWithChildrenFn<T> = T & { children?: FC<T> };
+export type CmpWithChildrenFn<T> = T & {
+  children?:
+    | ((props: T) => JSX.Element)
+    | MemoExoticComponent<(props: T) => JSX.Element>;
+};
 
 export type GanttBarBoxProps<T = any> = CmpWithChildrenFn<GanttBarProps<T>>;
 
@@ -50,6 +54,8 @@ export type GanttBarProps<T> = NodeProps<GanttBarData<T>> & {
   getBarStart: (row: T) => Dayjs | undefined;
   getBarEnd: (row: T) => Dayjs | undefined;
   rows: Row<T>[];
+  groupOptions: GroupOption<any>[] | undefined;
+  rowsById: Record<string, Row<T>>;
 };
 
 export type GroupGanttBarProps<T, D> = NodeProps<GroupGanttBarData<T, D>> & {
@@ -57,8 +63,7 @@ export type GroupGanttBarProps<T, D> = NodeProps<GroupGanttBarData<T, D>> & {
   onNodesChange: (changes: any) => void;
   onBarChange?: (startAt: any, endAt: any, node: GanttNode<T>) => void;
   originStart?: Dayjs;
-  // setExpandKeys: React.Dispatch<React.SetStateAction<readonly React.Key[]>>;
-  // expandKeys: readonly React.Key[];
+  rowsById: Record<string, Row<T>>;
 };
 
 export type GroupOption<T, D = BaseGroupHeaderData> = {
@@ -69,12 +74,23 @@ export type GroupOption<T, D = BaseGroupHeaderData> = {
   groupGanttComponent: FC<GroupGanttBarProps<T, D>>;
 };
 
-export const Gantt = memo((props: VirtualGanttProps) => {
-  return (
-    <div className={styles.VirtualGantt}>
-      <ReactFlowProvider>
-        <VirtualGantt {...props} />
-      </ReactFlowProvider>
-    </div>
-  );
-});
+export const Gantt = memo(
+  (
+    props: VirtualGanttProps & { tableBodyHeight: number; ganttHeight: number }
+  ) => {
+    const { table, tableBodyHeight, ganttHeight, ...rest } = props;
+    return (
+      <div className={styles.VirtualGantt}>
+        <ReactFlowProvider>
+          <VirtualGantt
+            {...rest}
+            table={useMemo(
+              () => table,
+              [props.data, tableBodyHeight, ganttHeight]
+            )}
+          />
+        </ReactFlowProvider>
+      </div>
+    );
+  }
+);

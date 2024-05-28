@@ -4,7 +4,7 @@ import {
   GanttCustomMode,
   GanttMode,
   HeadRender,
-} from './components/VirtualGantt';
+} from './components/virtual-gantt';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { CSSProperties, Key } from 'react';
 import { Edge, MarkerType, Node } from 'reactflow';
@@ -15,6 +15,7 @@ import weekYear from 'dayjs/plugin/weekYear';
 import 'dayjs/locale/zh-cn';
 import advancedFormat from 'dayjs/plugin/advancedFormat';
 import { GanttBarData, GanttNode, GroupGanttBarData, GroupOption } from '.';
+import { throttle } from 'lodash';
 dayjs.extend(advancedFormat);
 dayjs.extend(weekOfYear);
 dayjs.extend(weekYear);
@@ -260,7 +261,8 @@ export const getNodes = <T>(
   getLeafRowOriginalId: (row: Row<T>) => string,
   groupGap: number,
   isGroupView: boolean,
-  groupOptions?: GroupOption<T>[]
+  groupOptions?: GroupOption<T>[],
+  isGroup?: (row: Row<T>) => boolean
 ): GanttNode<T>[] => {
   const nodes: Node<GanttBarData<T> | GroupGanttBarData<T, any>>[] = [];
   virtualItems.forEach((virtualRow) => {
@@ -274,6 +276,7 @@ groupingValue
 '2024-06'
      */
     const row = rows[virtualRow.index] as Row<T>;
+    if (!row) return;
     const option = groupOptions?.find(
       ({ groupId }) => groupId === row.groupingColumnId
     );
@@ -282,8 +285,12 @@ groupingValue
     const id = getRowId(row);
     const barStart = isGroupRow ? group?.startAt : getBarStart(row.original);
     const barEnd = isGroupRow ? group?.endAt : getBarEnd(row.original);
-    const height = virtualRow.size - (isGroupRow ? groupGap : 0);
-    const y = virtualRow.start + (isGroupRow ? groupGap : 0);
+    const height =
+      virtualRow.size -
+      (isGroup?.(row) ? groupGap : !isGroup && isGroupRow ? groupGap : 0);
+    const y =
+      virtualRow.start +
+      (isGroup?.(row) ? groupGap : !isGroup && isGroupRow ? groupGap : 0);
 
     const width = (getDayDiff(barEnd, barStart, minBarRange) + 1) * cellWidth;
     const diff = getDayDiff(barStart ?? barEnd?.add(-1, 'day'), originStart, 0);
@@ -368,33 +375,35 @@ export const getDateFormX = (
       type: MarkerType.ArrowClosed,
     },
  */
-export const getEdges = <T>(
-  rows: Row<T>[],
-  virtualItems: VirtualItem[],
-  getFromLinkIds: (row: T) => Key[],
-  getLeafRowOriginalId: (row: Row<T>) => string
-) => {
-  const edges: Edge<T>[] = [];
-  virtualItems.forEach((virtualItem) => {
-    const row = rows[virtualItem.index];
-    if (row.groupingColumnId) return;
-    const toId = getLeafRowOriginalId(row);
-
-    getFromLinkIds(row.original)?.forEach((fromId) => {
-      // if (fromId === toId) return;
-      edges.push({
-        id: `${fromId}:${toId}`,
-        source: `${fromId}`,
-        target: `${toId}`,
-        type: 'deletable-smoothstep',
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-        },
+export const getEdges = throttle(
+  <T>(
+    rows: Row<T>[],
+    virtualItems: VirtualItem[],
+    getFromLinkIds: (row: T) => Key[],
+    getLeafRowOriginalId: (row: Row<T>) => string
+  ) => {
+    const edges: Edge<T>[] = [];
+    virtualItems.forEach((virtualItem) => {
+      const row = rows[virtualItem.index];
+      if (!row || row?.groupingColumnId) return;
+      const toId = getLeafRowOriginalId(row);
+      getFromLinkIds(row.original)?.forEach((fromId) => {
+        // if (fromId === toId) return;
+        edges.push({
+          id: `${fromId}:${toId}`,
+          source: `${fromId}`,
+          target: `${toId}`,
+          type: 'deletable-smoothstep',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
+        });
       });
     });
-  });
-  return edges;
-};
+    return edges;
+  },
+  200
+);
 
 export const onFitPosWhenResizeEnd = (
   cellWidth: number,
@@ -457,4 +466,8 @@ export const getIsModeLastDay = (
       break;
   }
   return isModeListDay;
+};
+
+export const getMilestonePositionX = (x: number) => {
+  return x + 100 > document.body.offsetWidth ? x - 60 : x + 15;
 };

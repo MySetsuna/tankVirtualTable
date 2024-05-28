@@ -16,12 +16,12 @@ import ReactFlow, {
   // applyEdgeChanges,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { AnyObject } from '../VirtualGantt';
+import { AnyObject } from '../virtual-gantt';
 import { GanttNode } from '../..';
 import { debounce, isNumber, throttle } from 'lodash';
 import { getDateFormX, onFitPosWhenResizeEnd } from '../../utils';
 import { Dayjs } from 'dayjs';
-import DeletableEdges from './DeletableEdges';
+import { DeletableEdges } from './deletable-edges';
 
 type GanttFlowProps<T = any> = {
   children: ReactNode;
@@ -37,7 +37,7 @@ type GanttFlowProps<T = any> = {
   onDisConnect?: (from: string, to: string) => void;
   onConnect?: (connection: Connection) => boolean | Promise<boolean>;
   renderEdgeDeleteTitle?: (props: {
-    form: GanttNode<any>;
+    from: GanttNode<any>;
     to: GanttNode<any>;
   }) => ReactNode;
 };
@@ -186,6 +186,11 @@ function GanttFlow(props: GanttFlowProps) {
       ) => {
         if (isNumber(changeNode.data.fixedX)) return;
         const oldNode = nodes?.find(({ id }) => changeNode.id === id);
+        if (
+          oldNode?.position.x === changeNode.position.x &&
+          changeNode.position.x % cellWidth === 0
+        )
+          return;
         const newChangeNode = {
           ...changeNode,
           position: {
@@ -219,47 +224,42 @@ function GanttFlow(props: GanttFlowProps) {
     [originStartDate, nodes]
   );
 
-  const onEdgeMouseLeave = (_event: any, edge: any) => {
-    const edgeId = edge.id;
+  const onEdgeMouseLeave = useCallback(
+    debounce((_event: any, edge: any) => {
+      onEdgeMouseEnter.cancel();
+      const edgeId = edge.id;
+      setEdges((prevElements) =>
+        prevElements.map((element) =>
+          element.id === edgeId
+            ? {
+                ...element,
+                data: { ...element.data, isHovered: false },
+              }
+            : element
+        )
+      );
+    }, 100),
+    []
+  );
 
-    // Updates edge
-    setEdges((prevElements) =>
-      prevElements.map((element) =>
-        element.id === edgeId
-          ? {
-              ...element,
-
-              data: {
-                ...element.data,
-
-                isHovered: false,
-              },
-            }
-          : element
-      )
-    );
-  };
-
-  const onEdgeMouseEnter = (_event: any, edge: any) => {
-    const edgeId = edge.id;
-
-    // Updates edge
-    setEdges((prevElements) =>
-      prevElements.map((element) =>
-        element.id === edgeId
-          ? {
-              ...element,
-
-              data: {
-                ...element.data,
-
-                isHovered: true,
-              },
-            }
-          : element
-      )
-    );
-  };
+  const onEdgeMouseEnter = useMemo(
+    () =>
+      debounce((_event: any, edge: any) => {
+        const edgeId = edge.id;
+        // Updates edge
+        setEdges((prevElements) =>
+          prevElements.map((element) =>
+            element.id === edgeId
+              ? {
+                  ...element,
+                  data: { ...element.data, isHovered: true },
+                }
+              : element
+          )
+        );
+      }),
+    []
+  );
 
   return (
     <ReactFlow
@@ -270,9 +270,7 @@ function GanttFlow(props: GanttFlowProps) {
           type: MarkerType.ArrowClosed,
           color: 'black',
         },
-        style: {
-          stroke: 'black',
-        },
+        style: { stroke: 'black' },
         type: 'deletable-smoothstep',
       }}
       onNodesChange={onNodesChange}
